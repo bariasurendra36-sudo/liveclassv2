@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SB Live Classes</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- PeerJS for WebRTC Device Syncing -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0f172a',
+                        darker: '#020617',
+                        panel: '#1e293b',
+                        primary: '#6366f1',
+                        accent: '#8b5cf6'
+                    },
+                    animation: {
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                    },
+                    keyframes: {
+                        glow: {
+                            '0%': { boxShadow: '0 0 10px rgba(99,102,241,0.5)' },
+                            '100%': { boxShadow: '0 0 25px rgba(99,102,241,0.9), 0 0 10px rgba(139,92,246,0.6)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        /* Selected States */
+        .tool-btn.selected {
+            background-color: rgba(99, 102, 241, 0.2);
+            color: #6366f1;
+            border: 1px solid rgba(99, 102, 241, 0.5);
+            transform: scale(1.1);
+            animation: glow 2s ease-in-out infinite alternate;
+            z-index: 10;
+        }
+        
+        .brush-btn.selected {
+            background-color: rgba(139, 92, 246, 0.2);
+            color: #8b5cf6;
+            border: 1px solid rgba(139, 92, 246, 0.5);
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.6);
+        }
+
+        .color-btn.selected {
+            border-color: white;
+            transform: scale(1.25);
+            z-index: 10;
+        }
+
+        /* Fixed Yellow Glow for Active/Touch States */
+        .tool-btn:active, .brush-btn:active, .color-btn:active {
+            color: #fde047 !important;
+            border-color: #facc15 !important;
+            box-shadow: 0 0 25px rgba(250, 204, 21, 0.9) !important;
+            background-color: rgba(250, 204, 21, 0.2) !important;
+            z-index: 50 !important;
+            transition: none !important;
+        }
+
+        /* Input color styling */
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+        
+        /* Fullscreen Camera Hide Elements */
+        .camera-fullscreen-hide {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="bg-darker text-white h-screen w-screen overflow-hidden flex flex-col font-sans select-none touch-none">
+
+    <!-- Top Navigation Bar -->
+    <header class="h-16 bg-panel border-b border-white/5 flex items-center justify-between px-6 shrink-0 z-40">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center shadow-[0_0_15px_rgba(234,179,8,0.4)]">
+                <i class="ph-bold ph-graduation-cap text-2xl text-white"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg tracking-wide bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent drop-shadow-sm outline-none border-b border-transparent focus:border-yellow-500/50 transition-colors" contenteditable="true" spellcheck="false" title="Click to edit title">SB LiveClasses</h1>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 sm:gap-4">
+            <!-- Zoom Controls -->
+            <div class="flex bg-white/5 rounded-lg border border-white/10 overflow-hidden items-center hidden sm:flex">
+                <button id="zoom-out-btn" class="px-3 py-2 hover:bg-white/10 text-gray-300 transition active:scale-95" title="Zoom Out">
+                    <i class="ph ph-magnifying-glass-minus text-lg"></i>
+                </button>
+                <div class="w-px h-6 bg-white/10"></div>
+                <button id="zoom-reset-btn" class="px-3 py-2 hover:bg-white/10 text-gray-300 transition active:scale-95 text-xs font-bold" title="Reset Zoom & Position">
+                    100%
+                </button>
+                <div class="w-px h-6 bg-white/10"></div>
+                <button id="zoom-in-btn" class="px-3 py-2 hover:bg-white/10 text-gray-300 transition active:scale-95" title="Zoom In">
+                    <i class="ph ph-magnifying-glass-plus text-lg"></i>
+                </button>
+            </div>
+
+            <div class="w-px h-6 bg-white/10 hidden sm:block"></div>
+
+            <!-- Device Sync Button -->
+            <button id="btn-open-sync" class="px-3 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 text-sm font-medium transition-colors border border-emerald-500/30 flex items-center gap-2 active:scale-95" title="Link Mobile Camera">
+                <i class="ph ph-devices text-lg"></i>
+                <span class="hidden lg:inline">Link Device</span>
+            </button>
+
+            <button id="toggle-camera-btn" class="px-3 py-2 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 text-sm font-medium transition-colors border border-primary/30 flex items-center gap-2 active:scale-95">
+                <i class="ph ph-video-camera text-lg" id="camera-icon"></i>
+                <span class="hidden sm:inline">Camera</span>
+            </button>
+            <div class="w-px h-6 bg-white/10"></div>
+            <button id="toggle-whiteboard-btn" class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-medium transition-colors border border-white/10 flex items-center gap-2 active:scale-95">
+                <i class="ph ph-presentation-chart"></i>
+                <span class="hidden md:inline">Whiteboard</span>
+            </button>
+            <label class="px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-sm font-medium transition-colors cursor-pointer flex items-center gap-2 shadow-lg shadow-primary/20 active:scale-95">
+                <i class="ph ph-upload-simple"></i>
+                <span class="hidden md:inline">Load PDF</span>
+                <input type="file" id="pdf-upload" accept="application/pdf" class="hidden" />
+            </label>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 relative bg-dark flex flex-col overflow-hidden w-full">
+        
+        <!-- Slide Navigation (Hidden if Whiteboard) -->
+        <div id="slide-controls" class="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-panel/90 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 flex items-center gap-4 shadow-xl opacity-0 transition-opacity duration-300 pointer-events-none">
+            <button id="prev-page" class="p-1.5 rounded-full hover:bg-white/10 text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed">
+                <i class="ph-bold ph-caret-left text-lg"></i>
+            </button>
+            <span class="text-sm font-medium w-24 text-center">Page <span id="page-num" class="text-primary">0</span> / <span id="page-count">0</span></span>
+            <button id="next-page" class="p-1.5 rounded-full hover:bg-white/10 text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed">
+                <i class="ph-bold ph-caret-right text-lg"></i>
+            </button>
+        </div>
+
+        <!-- Canvas Container Wrapper -->
+        <div id="canvas-wrapper" class="flex-1 relative overflow-hidden flex items-center justify-center p-4 sm:p-8 custom-scrollbar origin-center w-full">
+            <!-- Instruction Overlay -->
+            <div id="instruction-overlay" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 z-0 pointer-events-none">
+                <i class="ph ph-file-pdf text-6xl mb-4 opacity-50"></i>
+                <h2 class="text-xl font-medium">Load a PDF to start presenting</h2>
+                <p class="text-sm mt-2 opacity-70">Or switch to Whiteboard mode from the top right</p>
+            </div>
+
+            <!-- Zoomable/Pannable Container -->
+            <div id="canvases-container" class="relative shadow-2xl transition-transform duration-75 ease-out transform hidden origin-center" style="transform: translate(0px, 0px) scale(1);">
+                <!-- PDF Canvas (Background) -->
+                <canvas id="pdf-canvas" class="block rounded-lg bg-white"></canvas>
+                <!-- Drawing Canvas (Foreground) -->
+                <canvas id="draw-canvas" class="absolute top-0 left-0 rounded-lg z-10 touch-none cursor-crosshair"></canvas>
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Toolbar -->
+    <nav class="h-20 bg-panel border-t border-white/5 flex flex-row items-center justify-center px-4 gap-4 sm:gap-6 shrink-0 z-40 overflow-x-auto overflow-y-hidden custom-scrollbar w-full relative">
+        
+        <!-- Drawing Tools -->
+        <div class="flex flex-row gap-2 shrink-0">
+            <button id="tool-pen" class="tool-btn selected p-2.5 sm:p-3 rounded-xl transition-all duration-300 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 relative" title="Draw">
+                <i class="ph ph-pencil-simple text-xl sm:text-2xl"></i>
+            </button>
+            <button id="tool-highlight" class="tool-btn p-2.5 sm:p-3 rounded-xl transition-all duration-300 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 relative" title="Highlighter">
+                <i class="ph ph-highlighter text-xl sm:text-2xl"></i>
+            </button>
+            <button id="tool-pan" class="tool-btn p-2.5 sm:p-3 rounded-xl transition-all duration-300 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 relative" title="Pan / Move Canvas">
+                <i class="ph ph-hand-palm text-xl sm:text-2xl"></i>
+            </button>
+            <button id="tool-eraser" class="tool-btn p-2.5 sm:p-3 rounded-xl transition-all duration-300 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 relative" title="Eraser">
+                <i class="ph ph-eraser text-xl sm:text-2xl"></i>
+            </button>
+            <button id="tool-clear" class="tool-btn p-2.5 sm:p-3 rounded-xl transition-all duration-300 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-white/10 relative" title="Clear Canvas">
+                <i class="ph ph-trash text-xl sm:text-2xl"></i>
+            </button>
+        </div>
+
+        <div class="w-px h-10 bg-white/10 shrink-0 hidden sm:block"></div>
+
+        <!-- Brush Types -->
+        <div class="hidden flex-row items-center gap-1 sm:gap-2 shrink-0 lg:flex">
+            <span class="text-[10px] text-gray-500 uppercase font-bold mr-1 hidden lg:inline">Brush</span>
+            <button class="brush-btn selected p-2 rounded-lg transition-all duration-200 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 relative" data-brush="solid" title="Solid Pen"><i class="ph ph-pen-nib text-xl"></i></button>
+            <button class="brush-btn p-2 rounded-lg transition-all duration-200 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 relative" data-brush="spray" title="Spray Paint"><i class="ph ph-drop text-xl"></i></button>
+        </div>
+
+        <div class="w-px h-10 bg-white/10 shrink-0 hidden lg:block"></div>
+
+        <!-- Colors -->
+        <div class="flex flex-row items-center gap-2 sm:gap-3 shrink-0">
+            <span class="text-[10px] text-gray-500 uppercase font-bold mr-1 hidden lg:inline">Color</span>
+            <button class="color-btn selected text-red-500 w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-transparent transition-all duration-300 relative" style="background-color: #ef4444; box-shadow: 0 0 15px #ef4444, 0 0 5px white;" data-color="#ef4444" title="Red"></button>
+            <button class="color-btn text-orange-500 w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-transparent transition-all duration-300 relative" style="background-color: #f97316;" data-color="#f97316" title="Orange"></button>
+            <button class="color-btn text-yellow-500 w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-transparent transition-all duration-300 relative" style="background-color: #f59e0b;" data-color="#f59e0b" title="Yellow"></button>
+            <button class="color-btn text-emerald-500 w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-transparent transition-all duration-300 relative" style="background-color: #10b981;" data-color="#10b981" title="Green"></button>
+            <button class="color-btn text-cyan-500 w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-transparent transition-all duration-300 relative" style="background-color: #06b6d4;" data-color="#06b6d4" title="Cyan"></button>
+            <button class="color-btn text-blue-500 w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-transparent transition-all duration-300 relative" style="background-color: #3b82f6;" data-color="#3b82f6" title="Blue"></button>
+            <button class="color-btn text-purple-500 w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-transparent transition-all duration-300 relative" style="background-color: #8b5cf6;" data-color="#8b5cf6" title="Purple"></button>
+            <button class="color-btn text-pink-500 w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-transparent transition-all duration-300 relative" style="background-color: #ec4899;" data-color="#ec4899" title="Pink"></button>
+            <button class="color-btn text-white w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-transparent transition-all duration-300 relative" style="background-color: #ffffff;" data-color="#ffffff" title="White"></button>
+            <div class="relative w-6 h-6 sm:w-7 sm:h-7 rounded-full overflow-hidden border-2 border-transparent hover:scale-110 transition-transform cursor-pointer" title="Custom Color" id="custom-color-wrapper" style="background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);">
+                <input type="color" id="custom-color-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" value="#00ff00" />
+            </div>
+        </div>
+
+        <div class="w-px h-10 bg-white/10 shrink-0 hidden sm:block"></div>
+
+        <!-- Size Slider -->
+        <div class="flex flex-row items-center gap-2 sm:gap-3 shrink-0 mr-4">
+            <i class="ph ph-circles-three-plus text-gray-400"></i>
+            <input type="range" id="size-slider" min="1" max="40" value="4" class="w-24 sm:w-32 h-1.5 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-primary">
+        </div>
+    </nav>
+
+    <!-- Draggable Camera Window -->
+    <div id="camera-window" class="absolute bottom-28 right-8 z-50 flex flex-col group transition-all duration-300 w-72 h-48 bg-gray-900 rounded-2xl border border-primary/50 shadow-[0_10px_40px_rgba(0,0,0,0.5)] overflow-hidden cursor-grab active:cursor-grabbing" style="left: auto; top: auto;">
+        <div id="camera-drag-handle" class="absolute inset-0 z-20"></div>
+        <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover z-0 transform scale-x-[-1] transition-transform duration-300 rounded-inherit"></video>
+        
+        <!-- Camera Controls Overlay -->
+        <div id="cam-controls-panel" class="absolute top-3 right-3 z-30 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <!-- Fullscreen Button -->
+            <button id="cam-fullscreen-btn" class="p-2 bg-black/60 hover:bg-black/80 backdrop-blur-md rounded-lg text-white text-xs flex items-center justify-center border border-white/10 transition-colors" title="Toggle Fullscreen">
+                <i class="ph ph-corners-out text-lg" id="cam-fullscreen-icon"></i>
+            </button>
+            <!-- Cutout Shape Toggle Button -->
+            <button id="cam-shape-btn" class="p-2 bg-black/60 hover:bg-black/80 backdrop-blur-md rounded-lg text-white text-xs flex items-center justify-center border border-white/10 transition-colors" title="Toggle Focus Cutout">
+                <i class="ph ph-user-focus text-lg" id="cam-shape-icon"></i>
+            </button>
+            <!-- Mirror Image Toggle -->
+            <button id="cam-mirror-btn" class="p-2 bg-black/60 hover:bg-black/80 backdrop-blur-md rounded-lg text-white text-xs flex items-center justify-center border border-white/10 transition-colors" title="Mirror Camera Feed">
+                <i class="ph ph-arrows-left-right text-lg"></i>
+            </button>
+            <!-- Filter Toggle -->
+            <button id="cam-filter-btn" class="p-2 bg-black/60 hover:bg-black/80 backdrop-blur-md rounded-lg text-white text-xs flex items-center justify-center border border-white/10 transition-colors" title="Cycle Filters">
+                <i class="ph ph-magic-wand text-lg"></i>
+            </button>
+        </div>
+
+        <div id="cam-name-badge" class="absolute bottom-3 left-3 z-30 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 transition-opacity duration-300">
+            <div class="w-6 h-6 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center shadow-inner pointer-events-none shrink-0">
+                <i class="ph-fill ph-graduation-cap text-xs text-white"></i>
+            </div>
+            <span class="font-bold text-sm tracking-wide text-white drop-shadow-md outline-none border-b border-transparent focus:border-white/50 transition-colors whitespace-nowrap" contenteditable="true" spellcheck="false" title="Click to edit name">Surendra Baria</span>
+        </div>
+        <div id="cam-status" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 z-10 pointer-events-none rounded-inherit">
+            <i class="ph ph-camera-slash text-3xl text-gray-500 mb-2"></i>
+            <span class="text-xs text-gray-500">Camera Off</span>
+        </div>
+    </div>
+
+    <!-- Device Sync Modal -->
+    <div id="sync-modal" class="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm hidden flex items-center justify-center px-4 transition-opacity">
+        <div class="bg-panel border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl flex flex-col gap-4 relative">
+            <div class="flex justify-between items-center mb-2">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2"><i class="ph ph-devices text-primary"></i> Link Camera Feed</h2>
+                <button id="close-sync-modal" class="text-gray-400 hover:text-white transition-colors"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <p class="text-sm text-gray-400 leading-relaxed">Enter a unique class code on both devices to stream your mobile camera to this screen directly over Wi-Fi/Internet.</p>
+            
+            <input type="text" id="sync-code" placeholder="Enter Class Code (e.g., MATH101)" class="bg-darker border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors font-mono text-center text-lg tracking-widest uppercase shadow-inner">
+            
+            <div class="grid grid-cols-2 gap-3 mt-2">
+                <button id="btn-sync-host" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl py-3 px-2 flex flex-col items-center justify-center gap-2 transition-colors active:scale-95 text-emerald-400">
+                    <i class="ph ph-laptop text-3xl"></i>
+                    <span class="text-xs font-bold uppercase tracking-wide">Receive Here</span>
+                    <span class="text-[10px] text-gray-500">(Main Screen)</span>
+                </button>
+                <button id="btn-sync-client" class="bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl py-3 px-2 flex flex-col items-center justify-center gap-2 transition-colors active:scale-95 text-primary">
+                    <i class="ph ph-device-mobile-camera text-3xl"></i>
+                    <span class="text-xs font-bold uppercase tracking-wide">Send Video</span>
+                    <span class="text-[10px] text-gray-500">(Mobile Device)</span>
+                </button>
+            </div>
+            
+            <div id="sync-status-container" class="hidden mt-2 p-3 rounded-lg bg-darker border border-white/10 text-center text-sm shadow-inner transition-all">
+                <span id="sync-status-text" class="text-gray-300 font-medium">Connecting...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // --- State Management ---
+        const state = {
+            pdfDoc: null,
+            pageNum: 1,
+            pageIsRendering: false,
+            pageNumPending: null,
+            baseScale: 1.5,
+            
+            // Zoom & Pan
+            zoomLevel: 1.0,
+            panX: 0,
+            panY: 0,
+            isPanning: false,
+            panStartX: 0,
+            panStartY: 0,
+
+            isWhiteboard: false,
+            
+            // Drawing state
+            isDrawing: false,
+            currentTool: 'pen', 
+            brushType: 'solid', 
+            currentColor: '#ef4444',
+            currentSize: 4,
+            lastX: 0,
+            lastY: 0,
+            
+            // Touch pinch zoom state
+            initialPinchDist: null,
+            initialPinchCenterX: null,
+            initialPinchCenterY: null,
+
+            // Camera State
+            isCamHidden: false,
+            isCircularCam: false,
+            isFullscreenCam: false,
+            isMirrored: true, // Default true for front cams
+            camPreFullscreenPos: { left: 'auto', top: 'auto', bottom: '7rem', right: '2rem' }
+        };
+
+        // --- DOM Elements ---
+        const els = {
+            upload: document.getElementById('pdf-upload'),
+            pdfCanvas: document.getElementById('pdf-canvas'),
+            drawCanvas: document.getElementById('draw-canvas'),
+            container: document.getElementById('canvases-container'),
+            wrapper: document.getElementById('canvas-wrapper'),
+            instruction: document.getElementById('instruction-overlay'),
+            
+            // UI
+            prevBtn: document.getElementById('prev-page'),
+            nextBtn: document.getElementById('next-page'),
+            pageNum: document.getElementById('page-num'),
+            pageCount: document.getElementById('page-count'),
+            slideControls: document.getElementById('slide-controls'),
+            toggleWhiteboard: document.getElementById('toggle-whiteboard-btn'),
+            zoomInBtn: document.getElementById('zoom-in-btn'),
+            zoomOutBtn: document.getElementById('zoom-out-btn'),
+            zoomResetBtn: document.getElementById('zoom-reset-btn'),
+            
+            // Tools
+            toolBtns: document.querySelectorAll('.tool-btn'),
+            brushBtns: document.querySelectorAll('.brush-btn'),
+            colorBtns: document.querySelectorAll('.color-btn'),
+            customColorInput: document.getElementById('custom-color-input'),
+            customColorWrapper: document.getElementById('custom-color-wrapper'),
+            sizeSlider: document.getElementById('size-slider'),
+            btnClear: document.getElementById('tool-clear'),
+            toolHighlight: document.getElementById('tool-highlight'),
+            
+            // Camera
+            camWindow: document.getElementById('camera-window'),
+            video: document.getElementById('webcam'),
+            camStatus: document.getElementById('cam-status'),
+            toggleCamera: document.getElementById('toggle-camera-btn'),
+            cameraIcon: document.getElementById('camera-icon'),
+            camFilterBtn: document.getElementById('cam-filter-btn'),
+            camShapeBtn: document.getElementById('cam-shape-btn'),
+            camShapeIcon: document.getElementById('cam-shape-icon'),
+            camFullscreenBtn: document.getElementById('cam-fullscreen-btn'),
+            camFullscreenIcon: document.getElementById('cam-fullscreen-icon'),
+            camMirrorBtn: document.getElementById('cam-mirror-btn'),
+            camNameBadge: document.getElementById('cam-name-badge'),
+            camDragHandle: document.getElementById('camera-drag-handle'),
+
+            // Device Sync Modal
+            btnOpenSync: document.getElementById('btn-open-sync'),
+            syncModal: document.getElementById('sync-modal'),
+            closeSyncModal: document.getElementById('close-sync-modal'),
+            syncCodeInput: document.getElementById('sync-code'),
+            btnSyncHost: document.getElementById('btn-sync-host'),
+            btnSyncClient: document.getElementById('btn-sync-client'),
+            syncStatusContainer: document.getElementById('sync-status-container'),
+            syncStatusText: document.getElementById('sync-status-text')
+        };
+
+        const pdfCtx = els.pdfCanvas.getContext('2d');
+        const drawCtx = els.drawCanvas.getContext('2d', { willReadFrequently: true });
+
+        // --- PDF.js Setup ---
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // --- Zooming & Panning Logic ---
+        const applyTransform = () => {
+            els.container.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoomLevel})`;
+        };
+
+        const resetTransform = () => {
+            state.zoomLevel = 1.0;
+            state.panX = 0;
+            state.panY = 0;
+            applyTransform();
+        };
+
+        if(els.zoomInBtn) els.zoomInBtn.addEventListener('click', () => {
+            state.zoomLevel = Math.min(4.0, state.zoomLevel + 0.2);
+            applyTransform();
+        });
+        
+        if(els.zoomOutBtn) els.zoomOutBtn.addEventListener('click', () => {
+            state.zoomLevel = Math.max(0.4, state.zoomLevel - 0.2);
+            applyTransform();
+        });
+
+        if(els.zoomResetBtn) els.zoomResetBtn.addEventListener('click', resetTransform);
+
+        // Pinch to Zoom & Pan
+        els.wrapper.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                state.isDrawing = false; 
+                state.isPanning = false; 
+                
+                state.initialPinchDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                state.initialPinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                state.initialPinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            }
+        });
+        
+        els.wrapper.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && state.initialPinchDist) {
+                e.preventDefault(); 
+                
+                const currentDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                const diff = currentDist - state.initialPinchDist;
+                state.zoomLevel = Math.max(0.4, Math.min(4.0, state.zoomLevel + diff * 0.005));
+                state.initialPinchDist = currentDist;
+
+                const currentCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                const currentCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                
+                if (state.initialPinchCenterX !== null) {
+                    state.panX += (currentCenterX - state.initialPinchCenterX);
+                    state.panY += (currentCenterY - state.initialPinchCenterY);
+                }
+                
+                state.initialPinchCenterX = currentCenterX;
+                state.initialPinchCenterY = currentCenterY;
+
+                applyTransform();
+            }
+        }, { passive: false });
+        
+        els.wrapper.addEventListener('touchend', () => { 
+            state.initialPinchDist = null; 
+            state.initialPinchCenterX = null;
+            state.initialPinchCenterY = null;
+        });
+
+        // --- Functions: PDF Handling ---
+        const syncCanvasSizes = (width, height) => {
+            els.pdfCanvas.width = width; els.pdfCanvas.height = height;
+            els.drawCanvas.width = width; els.drawCanvas.height = height;
+        };
+
+        const renderPage = (num) => {
+            state.pageIsRendering = true;
+            
+            state.pdfDoc.getPage(num).then(page => {
+                const containerWidth = els.wrapper.clientWidth * 0.85; 
+                const unscaledViewport = page.getViewport({ scale: 1.0 });
+                state.baseScale = containerWidth / unscaledViewport.width;
+                const viewport = page.getViewport({ scale: state.baseScale });
+
+                syncCanvasSizes(viewport.width, viewport.height);
+
+                page.render({ canvasContext: pdfCtx, viewport: viewport }).promise.then(() => {
+                    state.pageIsRendering = false;
+                    if (state.pageNumPending !== null) {
+                        renderPage(state.pageNumPending);
+                        state.pageNumPending = null;
+                    }
+                });
+
+                els.pageNum.textContent = num;
+                updatePaginationButtons();
+                clearCanvas();
+            });
+        };
+
+        const queueRenderPage = (num) => { state.pageIsRendering ? state.pageNumPending = num : renderPage(num); };
+        const updatePaginationButtons = () => {
+            els.prevBtn.disabled = state.pageNum <= 1;
+            els.nextBtn.disabled = state.pageNum >= state.pdfDoc.numPages;
+        };
+
+        els.upload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file && file.type === 'application/pdf') {
+                const fileReader = new FileReader();
+                fileReader.onload = function() {
+                    pdfjsLib.getDocument(new Uint8Array(this.result)).promise.then(pdfDoc_ => {
+                        state.pdfDoc = pdfDoc_;
+                        els.pageCount.textContent = state.pdfDoc.numPages;
+                        state.pageNum = 1;
+                        
+                        els.instruction.classList.add('hidden');
+                        els.container.classList.remove('hidden');
+                        els.slideControls.classList.remove('opacity-0', 'pointer-events-none');
+                        state.isWhiteboard = false;
+                        updateWhiteboardBtnUI();
+                        resetTransform(); 
+                        
+                        renderPage(state.pageNum);
+                    });
+                };
+                fileReader.readAsArrayBuffer(file);
+            }
+        });
+
+        els.prevBtn.addEventListener('click', () => { if (state.pageNum > 1) { state.pageNum--; queueRenderPage(state.pageNum); } });
+        els.nextBtn.addEventListener('click', () => { if (state.pageNum < state.pdfDoc.numPages) { state.pageNum++; queueRenderPage(state.pageNum); } });
+
+        // --- Functions: Whiteboard Toggle ---
+        els.toggleWhiteboard.addEventListener('click', () => {
+            state.isWhiteboard = !state.isWhiteboard;
+            updateWhiteboardBtnUI();
+            resetTransform(); 
+            
+            if (state.isWhiteboard) {
+                els.slideControls.classList.add('opacity-0', 'pointer-events-none');
+                els.instruction.classList.add('hidden');
+                els.container.classList.remove('hidden');
+                
+                syncCanvasSizes(els.wrapper.clientWidth * 0.9, els.wrapper.clientHeight * 0.9);
+                pdfCtx.fillStyle = '#ffffff';
+                pdfCtx.fillRect(0, 0, els.pdfCanvas.width, els.pdfCanvas.height);
+                clearCanvas();
+            } else {
+                if (state.pdfDoc) {
+                    els.slideControls.classList.remove('opacity-0', 'pointer-events-none');
+                    renderPage(state.pageNum);
+                } else {
+                    els.container.classList.add('hidden');
+                    els.instruction.classList.remove('hidden');
+                }
+            }
+        });
+
+        const updateWhiteboardBtnUI = () => {
+            if (state.isWhiteboard) {
+                els.toggleWhiteboard.innerHTML = `<i class="ph ph-file-pdf"></i><span class="hidden md:inline">Back to Slides</span>`;
+                els.toggleWhiteboard.classList.replace('bg-white/5', 'bg-accent');
+                els.toggleWhiteboard.classList.add('text-white');
+            } else {
+                els.toggleWhiteboard.innerHTML = `<i class="ph ph-presentation-chart"></i><span class="hidden md:inline">Whiteboard</span>`;
+                els.toggleWhiteboard.classList.replace('bg-accent', 'bg-white/5');
+                els.toggleWhiteboard.classList.remove('text-white');
+            }
+        };
+
+        // --- Functions: Drawing ---
+        const getMousePos = (e) => {
+            const rect = els.drawCanvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            const scaleX = els.drawCanvas.width / rect.width;
+            const scaleY = els.drawCanvas.height / rect.height;
+
+            return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+        };
+
+        const drawBrushEffect = (pos, context = drawCtx) => {
+            if (state.currentTool === 'eraser') {
+                context.globalCompositeOperation = 'destination-out';
+                context.beginPath();
+                context.arc(pos.x, pos.y, state.currentSize * 3, 0, Math.PI * 2);
+                context.fill();
+                return;
+            }
+
+            context.globalCompositeOperation = 'source-over';
+            context.fillStyle = state.currentColor;
+            context.strokeStyle = state.currentColor;
+
+            if (state.brushType === 'solid') {
+                context.beginPath();
+                context.moveTo(state.lastX, state.lastY);
+                context.lineTo(pos.x, pos.y);
+                context.lineCap = 'round';
+                context.lineJoin = 'round';
+                context.lineWidth = state.currentSize;
+                context.stroke();
+            } else if (state.brushType === 'marker') {
+                context.globalAlpha = 0.3;
+                context.beginPath();
+                context.moveTo(state.lastX, state.lastY);
+                context.lineTo(pos.x, pos.y);
+                context.lineCap = 'square';
+                context.lineWidth = state.currentSize * 4;
+                context.stroke();
+                context.globalAlpha = 1.0;
+            } else if (state.brushType === 'spray') {
+                const radius = state.currentSize * 2.5;
+                for (let i = 0; i < state.currentSize * 3; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const r = Math.random() * radius;
+                    context.fillRect(pos.x + Math.cos(angle)*r, pos.y + Math.sin(angle)*r, 1.5, 1.5);
+                }
+            }
+        };
+
+        const startAction = (e) => {
+            if (e.touches && e.touches.length > 1) return; 
+
+            if (state.currentTool === 'pan') {
+                state.isPanning = true;
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                state.panStartX = clientX - state.panX;
+                state.panStartY = clientY - state.panY;
+                els.drawCanvas.style.cursor = 'grabbing';
+                return;
+            }
+
+            e.preventDefault();
+            const pos = getMousePos(e);
+            
+            state.isDrawing = true;
+            state.lastX = pos.x;
+            state.lastY = pos.y;
+            drawBrushEffect(pos); 
+        };
+
+        const doAction = (e) => {
+            if (e.touches && e.touches.length > 1) return;
+
+            if (state.isPanning) {
+                e.preventDefault();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                state.panX = clientX - state.panStartX;
+                state.panY = clientY - state.panStartY;
+                applyTransform();
+                return;
+            }
+
+            const pos = getMousePos(e);
+
+            if (state.isDrawing) {
+                e.preventDefault();
+                drawBrushEffect(pos);
+                state.lastX = pos.x;
+                state.lastY = pos.y;
+            }
+        };
+
+        const stopAction = (e) => {
+            if (state.isPanning) {
+                state.isPanning = false;
+                els.drawCanvas.style.cursor = 'grab';
+                return;
+            }
+            state.isDrawing = false;
+        };
+
+        const clearCanvas = () => {
+            drawCtx.clearRect(0, 0, els.drawCanvas.width, els.drawCanvas.height);
+        };
+
+        els.drawCanvas.addEventListener('mousedown', startAction);
+        window.addEventListener('mousemove', doAction);
+        window.addEventListener('mouseup', stopAction);
+
+        els.drawCanvas.addEventListener('touchstart', startAction, { passive: false });
+        window.addEventListener('touchmove', doAction, { passive: false });
+        window.addEventListener('touchend', stopAction);
+
+        // --- Functions: Toolbar Configuration ---
+        els.toolBtns.forEach(btn => {
+            if (btn.id === 'tool-clear') { btn.addEventListener('click', clearCanvas); return; }
+            
+            btn.addEventListener('click', () => {
+                els.toolBtns.forEach(b => { if(b.id !== 'tool-clear') b.classList.remove('selected'); });
+                btn.classList.add('selected');
+                
+                if (btn.id === 'tool-pen') { 
+                    state.currentTool = 'pen'; 
+                    state.brushType = 'solid'; 
+                    els.drawCanvas.style.cursor = 'crosshair'; 
+                }
+                if (btn.id === 'tool-highlight') { 
+                    state.currentTool = 'pen'; 
+                    state.brushType = 'marker'; 
+                    els.drawCanvas.style.cursor = 'text'; 
+                }
+                if (btn.id === 'tool-pan') { state.currentTool = 'pan'; els.drawCanvas.style.cursor = 'grab'; }
+                if (btn.id === 'tool-eraser') { state.currentTool = 'eraser'; els.drawCanvas.style.cursor = 'no-drop'; }
+            });
+        });
+
+        els.brushBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                els.brushBtns.forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                state.brushType = btn.dataset.brush;
+                if(state.currentTool !== 'pen') document.getElementById('tool-pen').click();
+            });
+        });
+
+        const setColor = (color) => {
+            state.currentColor = color;
+            els.colorBtns.forEach(b => {
+                b.classList.remove('selected');
+                b.style.boxShadow = 'none';
+            });
+            els.customColorWrapper.classList.remove('border-white', 'scale-125', 'shadow-lg');
+            
+            if(state.currentTool !== 'pen' && state.currentTool !== 'highlight') {
+                 document.getElementById(state.brushType === 'marker' ? 'tool-highlight' : 'tool-pen').click();
+            }
+        };
+
+        els.colorBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                setColor(btn.dataset.color);
+                btn.classList.add('selected');
+                btn.style.boxShadow = `0 0 15px ${btn.dataset.color}, 0 0 5px white`;
+            });
+        });
+
+        els.customColorInput.addEventListener('input', (e) => {
+            setColor(e.target.value);
+            els.customColorWrapper.classList.add('border-white', 'scale-125', 'shadow-[0_0_15px_rgba(255,255,255,0.5)]');
+        });
+
+        els.sizeSlider.addEventListener('input', (e) => { state.currentSize = parseInt(e.target.value); });
+
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                if (state.isWhiteboard) {
+                    const temp = document.createElement('canvas');
+                    temp.width = els.drawCanvas.width; temp.height = els.drawCanvas.height;
+                    temp.getContext('2d').drawImage(els.drawCanvas, 0, 0);
+
+                    syncCanvasSizes(els.wrapper.clientWidth * 0.9, els.wrapper.clientHeight * 0.9);
+                    pdfCtx.fillStyle = '#ffffff'; pdfCtx.fillRect(0, 0, els.pdfCanvas.width, els.pdfCanvas.height);
+                    drawCtx.drawImage(temp, 0, 0, els.drawCanvas.width, els.drawCanvas.height);
+                } else if (state.pdfDoc) {
+                    renderPage(state.pageNum);
+                }
+            }, 200);
+        });
+
+        // --- Functions: Camera Setup & Dragging ---
+        const updateCameraUI = () => {
+            if (state.isCamHidden) {
+                els.camWindow.classList.add('hidden');
+                els.toggleCamera.classList.replace('bg-primary/20', 'bg-white/5');
+                els.toggleCamera.classList.replace('text-primary', 'text-gray-400');
+                els.toggleCamera.classList.replace('border-primary/30', 'border-white/10');
+                els.cameraIcon.classList.replace('ph-video-camera', 'ph-video-camera-slash');
+                return;
+            }
+
+            els.camWindow.classList.remove('hidden');
+            els.toggleCamera.classList.replace('bg-white/5', 'bg-primary/20');
+            els.toggleCamera.classList.replace('text-gray-400', 'text-primary');
+            els.toggleCamera.classList.replace('border-white/10', 'border-primary/30');
+            els.cameraIcon.classList.replace('ph-video-camera-slash', 'ph-video-camera');
+
+            let classes = 'z-50 flex flex-col group overflow-hidden transition-all duration-300 ';
+            
+            if (state.isFullscreenCam) {
+                classes += 'fixed inset-0 w-full h-full bg-black rounded-none ';
+                els.camFullscreenIcon.className = 'ph ph-corners-in text-lg';
+                els.camNameBadge.classList.remove('opacity-0', 'pointer-events-none');
+                els.video.style.borderRadius = '0';
+                
+                els.camWindow.style.left = '0px';
+                els.camWindow.style.top = '0px';
+                els.camWindow.style.bottom = 'auto';
+                els.camWindow.style.right = 'auto';
+            } else {
+                classes += 'absolute cursor-grab active:cursor-grabbing shadow-[0_10px_40px_rgba(0,0,0,0.5)] ';
+                els.camFullscreenIcon.className = 'ph ph-corners-out text-lg';
+
+                if (state.isCircularCam) {
+                    classes += 'w-56 h-56 rounded-full bg-transparent border-none ';
+                    els.camShapeIcon.className = 'ph ph-rectangle text-lg';
+                    els.camNameBadge.classList.add('opacity-0', 'pointer-events-none');
+                    els.video.style.borderRadius = '50%'; 
+                } else {
+                    classes += 'w-72 h-48 rounded-2xl bg-gray-900 border border-primary/50 ';
+                    els.camShapeIcon.className = 'ph ph-user-focus text-lg';
+                    els.camNameBadge.classList.remove('opacity-0', 'pointer-events-none');
+                    els.video.style.borderRadius = '0'; 
+                }
+
+                if (els.camWindow.style.left === '0px' && els.camWindow.style.top === '0px' && state.camPreFullscreenPos.left !== '0px') {
+                    els.camWindow.style.left = state.camPreFullscreenPos.left;
+                    els.camWindow.style.top = state.camPreFullscreenPos.top;
+                    els.camWindow.style.bottom = state.camPreFullscreenPos.bottom;
+                    els.camWindow.style.right = state.camPreFullscreenPos.right;
+                }
+            }
+
+            // Apply Mirror state
+            els.video.style.transform = state.isMirrored ? 'scaleX(-1)' : 'scaleX(1)';
+
+            els.camWindow.className = classes;
+        };
+
+        // Mirror Toggle logic
+        els.camMirrorBtn.addEventListener('mousedown', (e) => e.stopPropagation()); 
+        els.camMirrorBtn.addEventListener('touchstart', (e) => e.stopPropagation());
+        els.camMirrorBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.isMirrored = !state.isMirrored;
+            updateCameraUI();
+        });
+
+        els.toggleCamera.addEventListener('click', () => {
+            state.isCamHidden = !state.isCamHidden;
+            updateCameraUI();
+        });
+
+        // Request local stream on startup
+        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+            .then(stream => { els.video.srcObject = stream; els.camStatus.classList.add('hidden'); })
+            .catch(err => { els.camStatus.querySelector('span').textContent = "Camera Access Denied"; });
+
+        // Camera Filters
+        const camFilters = [
+            'none',
+            'grayscale(100%)',
+            'sepia(100%)',
+            'contrast(130%) saturate(150%)',
+            'brightness(120%)',
+            'hue-rotate(90deg)'
+        ];
+        let currentFilterIdx = 0;
+
+        els.camFilterBtn.addEventListener('mousedown', (e) => e.stopPropagation()); 
+        els.camFilterBtn.addEventListener('touchstart', (e) => e.stopPropagation()); 
+        els.camFilterBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentFilterIdx = (currentFilterIdx + 1) % camFilters.length;
+            els.video.style.filter = camFilters[currentFilterIdx];
+        });
+
+        els.camShapeBtn.addEventListener('mousedown', (e) => e.stopPropagation()); 
+        els.camShapeBtn.addEventListener('touchstart', (e) => e.stopPropagation());
+        els.camShapeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (state.isFullscreenCam) return; 
+            state.isCircularCam = !state.isCircularCam;
+            updateCameraUI();
+        });
+
+        els.camFullscreenBtn.addEventListener('mousedown', (e) => e.stopPropagation()); 
+        els.camFullscreenBtn.addEventListener('touchstart', (e) => e.stopPropagation());
+        els.camFullscreenBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.isFullscreenCam = !state.isFullscreenCam;
+            if (state.isFullscreenCam) {
+                state.camPreFullscreenPos = {
+                    left: els.camWindow.style.left,
+                    top: els.camWindow.style.top,
+                    bottom: els.camWindow.style.bottom,
+                    right: els.camWindow.style.right
+                };
+            }
+            updateCameraUI();
+        });
+
+        let isDraggingCam = false;
+        let camStartX, camStartY, camInitialLeft, camInitialTop;
+
+        els.camDragHandle.addEventListener('mousedown', (e) => {
+            if (state.isFullscreenCam) return;
+            isDraggingCam = true;
+            els.camWindow.classList.add('transition-none');
+            const rect = els.camWindow.getBoundingClientRect();
+            camInitialLeft = rect.left; camInitialTop = rect.top;
+            camStartX = e.clientX; camStartY = e.clientY;
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDraggingCam || state.isFullscreenCam) return;
+            let newLeft = camInitialLeft + (e.clientX - camStartX);
+            let newTop = camInitialTop + (e.clientY - camStartY);
+            newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - els.camWindow.offsetWidth));
+            newTop = Math.max(0, Math.min(newTop, window.innerHeight - els.camWindow.offsetHeight));
+            
+            els.camWindow.style.bottom = 'auto'; els.camWindow.style.right = 'auto';
+            els.camWindow.style.left = `${newLeft}px`; els.camWindow.style.top = `${newTop}px`;
+        });
+        
+        window.addEventListener('mouseup', () => { 
+            if(isDraggingCam) { 
+                isDraggingCam = false; 
+                els.camWindow.classList.remove('transition-none'); 
+            }
+        });
+
+        els.camWindow.style.bottom = '7rem';
+        els.camWindow.style.right = '2rem';
+        updateCameraUI();
+
+        // --- Functions: Device Syncing using PeerJS ---
+        let peer = null;
+        let currentCall = null;
+        
+        const setSyncStatus = (msg, iconHtml) => {
+            els.syncStatusContainer.classList.remove('hidden');
+            els.syncStatusContainer.innerHTML = `${iconHtml}<span class="text-white">${msg}</span>`;
+        };
+
+        els.btnOpenSync.addEventListener('click', () => {
+            els.syncModal.classList.remove('hidden');
+            els.syncStatusContainer.classList.add('hidden');
+        });
+
+        els.closeSyncModal.addEventListener('click', () => {
+            els.syncModal.classList.add('hidden');
+        });
+
+        // HOST: Receives the camera feed
+        els.btnSyncHost.addEventListener('click', () => {
+            const code = els.syncCodeInput.value.trim().toLowerCase();
+            if(!code) {
+                setSyncStatus("Please enter a class code first.", '<i class="ph ph-warning text-yellow-400 inline-block mr-2"></i>');
+                return;
+            }
+            
+            setSyncStatus("Registering Host session...", '<i class="ph ph-spinner animate-spin text-emerald-400 inline-block mr-2"></i>');
+            
+            if(peer) peer.destroy();
+            peer = new Peer('sblive-host-' + code);
+            
+            peer.on('open', (id) => {
+                setSyncStatus(`Waiting for mobile device to join code: <b>${code.toUpperCase()}</b>`, '<i class="ph ph-hourglass-high animate-pulse text-emerald-400 inline-block mr-2"></i>');
+            });
+            
+            peer.on('call', (call) => {
+                currentCall = call;
+                call.answer(); // Answer without sending a local stream
+                setSyncStatus("Mobile connected! Receiving video...", '<i class="ph ph-check-circle text-emerald-400 inline-block mr-2"></i>');
+                
+                call.on('stream', (remoteStream) => {
+                    els.video.srcObject = remoteStream;
+                    els.camStatus.classList.add('hidden');
+                    
+                    // Default to un-mirrored for external cameras (they face outward)
+                    state.isMirrored = false;
+                    
+                    state.isCamHidden = false;
+                    updateCameraUI();
+                    
+                    setTimeout(() => { els.syncModal.classList.add('hidden'); }, 1500);
+                });
+            });
+            
+            peer.on('error', (err) => {
+                setSyncStatus(`Connection Error: ${err.type}`, '<i class="ph ph-warning text-red-400 inline-block mr-2"></i>');
+            });
+        });
+
+        // CLIENT: Sends the camera feed
+        els.btnSyncClient.addEventListener('click', () => {
+            const code = els.syncCodeInput.value.trim().toLowerCase();
+            if(!code) {
+                setSyncStatus("Please enter a class code first.", '<i class="ph ph-warning text-yellow-400 inline-block mr-2"></i>');
+                return;
+            }
+            
+            setSyncStatus("Accessing mobile camera...", '<i class="ph ph-spinner animate-spin text-primary inline-block mr-2"></i>');
+            
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: true })
+                .then(stream => {
+                    els.video.srcObject = stream;
+                    els.camStatus.classList.add('hidden');
+                    
+                    // External cameras face outward, no mirror needed usually
+                    state.isMirrored = false;
+                    
+                    state.isCamHidden = false;
+                    updateCameraUI();
+                    
+                    setSyncStatus("Connecting to Host...", '<i class="ph ph-spinner animate-spin text-primary inline-block mr-2"></i>');
+                    
+                    if(peer) peer.destroy();
+                    peer = new Peer(); // Random ID for client
+                    
+                    peer.on('open', (id) => {
+                        const call = peer.call('sblive-host-' + code, stream);
+                        currentCall = call;
+                        
+                        setSyncStatus("Broadcasting to Main Screen!", '<i class="ph ph-broadcast text-emerald-400 animate-pulse inline-block mr-2"></i>');
+                        setTimeout(() => { els.syncModal.classList.add('hidden'); }, 2000);
+                        
+                        // To keep UI clean for the mobile sender, we can auto-fullscreen
+                        if (!state.isFullscreenCam) {
+                            els.camFullscreenBtn.click();
+                        }
+                    });
+                    
+                    peer.on('error', (err) => {
+                        setSyncStatus("Host not found. Ensure PC is waiting.", '<i class="ph ph-warning text-red-400 inline-block mr-2"></i>');
+                    });
+                })
+                .catch(err => {
+                    setSyncStatus("Camera Access Denied by browser.", '<i class="ph ph-warning text-red-400 inline-block mr-2"></i>');
+                });
+        });
+
+    </script>
+</body>
+</html>
