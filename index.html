@@ -12,6 +12,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <!-- PeerJS for WebRTC Device Syncing -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- QRCode.js for generating connection QR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
     <script>
         tailwind.config = {
@@ -117,12 +119,6 @@
             </div>
 
             <div class="w-px h-6 bg-white/10 hidden sm:block"></div>
-
-            <!-- Device Sync Button -->
-            <button id="btn-open-sync" class="px-3 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 text-sm font-medium transition-colors border border-emerald-500/30 flex items-center gap-2 active:scale-95" title="Link Mobile Camera">
-                <i class="ph ph-devices text-lg"></i>
-                <span class="hidden lg:inline">Link Device</span>
-            </button>
 
             <button id="toggle-camera-btn" class="px-3 py-2 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 text-sm font-medium transition-colors border border-primary/30 flex items-center gap-2 active:scale-95">
                 <i class="ph ph-video-camera text-lg" id="camera-icon"></i>
@@ -240,6 +236,10 @@
         
         <!-- Camera Controls Overlay -->
         <div id="cam-controls-panel" class="absolute top-3 right-3 z-30 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <!-- QR Connect Button -->
+            <button id="cam-qr-btn" class="p-2 bg-black/60 hover:bg-black/80 backdrop-blur-md rounded-lg text-emerald-400 text-xs flex items-center justify-center border border-emerald-500/50 transition-colors shadow-[0_0_10px_rgba(16,185,129,0.3)]" title="Link Mobile via QR">
+                <i class="ph ph-qr-code text-lg"></i>
+            </button>
             <!-- Fullscreen Button -->
             <button id="cam-fullscreen-btn" class="p-2 bg-black/60 hover:bg-black/80 backdrop-blur-md rounded-lg text-white text-xs flex items-center justify-center border border-white/10 transition-colors" title="Toggle Fullscreen">
                 <i class="ph ph-corners-out text-lg" id="cam-fullscreen-icon"></i>
@@ -258,6 +258,13 @@
             </button>
         </div>
 
+        <!-- QR Overlay inside Camera -->
+        <div id="cam-qr-overlay" class="absolute inset-0 z-40 bg-gray-900/95 backdrop-blur flex flex-col items-center justify-center hidden rounded-inherit">
+            <h3 class="text-emerald-400 text-[10px] sm:text-xs font-bold mb-2 uppercase tracking-wider text-center px-2">Scan to connect<br>mobile camera</h3>
+            <div id="qrcode-container" class="bg-white p-1.5 sm:p-2 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)]"></div>
+            <button id="cancel-qr-btn" class="mt-3 text-[10px] sm:text-xs bg-white/10 text-gray-300 px-4 py-1.5 rounded-full hover:bg-white/20 transition-colors active:scale-95">Cancel</button>
+        </div>
+
         <div id="cam-name-badge" class="absolute bottom-3 left-3 z-30 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 transition-opacity duration-300">
             <div class="w-6 h-6 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center shadow-inner pointer-events-none shrink-0">
                 <i class="ph-fill ph-graduation-cap text-xs text-white"></i>
@@ -270,773 +277,789 @@
         </div>
     </div>
 
-    <!-- Device Sync Modal -->
-    <div id="sync-modal" class="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm hidden flex items-center justify-center px-4 transition-opacity">
-        <div class="bg-panel border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl flex flex-col gap-4 relative">
-            <div class="flex justify-between items-center mb-2">
-                <h2 class="text-xl font-bold text-white flex items-center gap-2"><i class="ph ph-devices text-primary"></i> Link Camera Feed</h2>
-                <button id="close-sync-modal" class="text-gray-400 hover:text-white transition-colors"><i class="ph ph-x text-xl"></i></button>
-            </div>
-            <p class="text-sm text-gray-400 leading-relaxed">Enter a unique class code on both devices to stream your mobile camera to this screen directly over Wi-Fi/Internet.</p>
-            
-            <input type="text" id="sync-code" placeholder="Enter Class Code (e.g., MATH101)" class="bg-darker border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors font-mono text-center text-lg tracking-widest uppercase shadow-inner">
-            
-            <div class="grid grid-cols-2 gap-3 mt-2">
-                <button id="btn-sync-host" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl py-3 px-2 flex flex-col items-center justify-center gap-2 transition-colors active:scale-95 text-emerald-400">
-                    <i class="ph ph-laptop text-3xl"></i>
-                    <span class="text-xs font-bold uppercase tracking-wide">Receive Here</span>
-                    <span class="text-[10px] text-gray-500">(Main Screen)</span>
-                </button>
-                <button id="btn-sync-client" class="bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl py-3 px-2 flex flex-col items-center justify-center gap-2 transition-colors active:scale-95 text-primary">
-                    <i class="ph ph-device-mobile-camera text-3xl"></i>
-                    <span class="text-xs font-bold uppercase tracking-wide">Send Video</span>
-                    <span class="text-[10px] text-gray-500">(Mobile Device)</span>
-                </button>
-            </div>
-            
-            <div id="sync-status-container" class="hidden mt-2 p-3 rounded-lg bg-darker border border-white/10 text-center text-sm shadow-inner transition-all">
-                <span id="sync-status-text" class="text-gray-300 font-medium">Connecting...</span>
-            </div>
-        </div>
-    </div>
-
     <!-- Application Logic -->
     <script>
-        // --- State Management ---
-        const state = {
-            pdfDoc: null,
-            pageNum: 1,
-            pageIsRendering: false,
-            pageNumPending: null,
-            baseScale: 1.5,
-            
-            // Zoom & Pan
-            zoomLevel: 1.0,
-            panX: 0,
-            panY: 0,
-            isPanning: false,
-            panStartX: 0,
-            panStartY: 0,
+        // IIFE Structure to seamlessly separate Mobile Sender Mode from Main PC Mode
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const syncCode = urlParams.get('sync');
 
-            isWhiteboard: false,
-            
-            // Drawing state
-            isDrawing: false,
-            currentTool: 'pen', 
-            brushType: 'solid', 
-            currentColor: '#ef4444',
-            currentSize: 4,
-            lastX: 0,
-            lastY: 0,
-            
-            // Touch pinch zoom state
-            initialPinchDist: null,
-            initialPinchCenterX: null,
-            initialPinchCenterY: null,
+            // ==========================================
+            // MODE 1: MOBILE SENDER MODE (Triggered via QR)
+            // ==========================================
+            if (syncCode) {
+                // Completely replace UI for the mobile sender to keep it clean & fullscreen
+                document.body.innerHTML = `
+                    <div class="h-screen w-screen bg-black flex flex-col items-center justify-center text-white relative font-sans overflow-hidden">
+                        <video id="mobile-sender-video" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover z-0"></video>
+                        
+                        <div id="mobile-status" class="z-10 absolute top-8 bg-black/60 backdrop-blur-md px-6 py-3 rounded-full text-sm font-medium flex items-center gap-3 shadow-xl border border-white/10 transition-colors">
+                            <i class="ph ph-spinner animate-spin text-primary text-xl"></i> 
+                            <span>Connecting to Class...</span>
+                        </div>
+                        
+                        <button id="mobile-flip" class="absolute top-8 right-6 z-10 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white p-3 rounded-full shadow-lg transition-transform active:scale-95 border border-white/10">
+                            <i class="ph ph-camera-rotate text-2xl"></i>
+                        </button>
 
-            // Camera State
-            isCamHidden: false,
-            isCircularCam: false,
-            isFullscreenCam: false,
-            isMirrored: true, // Default true for front cams
-            camPreFullscreenPos: { left: 'auto', top: 'auto', bottom: '7rem', right: '2rem' }
-        };
+                        <button id="mobile-stop" class="absolute bottom-12 z-10 bg-red-500/90 hover:bg-red-600 backdrop-blur-md text-white px-8 py-4 rounded-full font-bold shadow-2xl flex items-center gap-2 transition-transform active:scale-95 border border-red-400/50">
+                            <i class="ph ph-x-circle text-2xl"></i> Stop Camera
+                        </button>
+                    </div>
+                `;
 
-        // --- DOM Elements ---
-        const els = {
-            upload: document.getElementById('pdf-upload'),
-            pdfCanvas: document.getElementById('pdf-canvas'),
-            drawCanvas: document.getElementById('draw-canvas'),
-            container: document.getElementById('canvases-container'),
-            wrapper: document.getElementById('canvas-wrapper'),
-            instruction: document.getElementById('instruction-overlay'),
-            
-            // UI
-            prevBtn: document.getElementById('prev-page'),
-            nextBtn: document.getElementById('next-page'),
-            pageNum: document.getElementById('page-num'),
-            pageCount: document.getElementById('page-count'),
-            slideControls: document.getElementById('slide-controls'),
-            toggleWhiteboard: document.getElementById('toggle-whiteboard-btn'),
-            zoomInBtn: document.getElementById('zoom-in-btn'),
-            zoomOutBtn: document.getElementById('zoom-out-btn'),
-            zoomResetBtn: document.getElementById('zoom-reset-btn'),
-            
-            // Tools
-            toolBtns: document.querySelectorAll('.tool-btn'),
-            brushBtns: document.querySelectorAll('.brush-btn'),
-            colorBtns: document.querySelectorAll('.color-btn'),
-            customColorInput: document.getElementById('custom-color-input'),
-            customColorWrapper: document.getElementById('custom-color-wrapper'),
-            sizeSlider: document.getElementById('size-slider'),
-            btnClear: document.getElementById('tool-clear'),
-            toolHighlight: document.getElementById('tool-highlight'),
-            
-            // Camera
-            camWindow: document.getElementById('camera-window'),
-            video: document.getElementById('webcam'),
-            camStatus: document.getElementById('cam-status'),
-            toggleCamera: document.getElementById('toggle-camera-btn'),
-            cameraIcon: document.getElementById('camera-icon'),
-            camFilterBtn: document.getElementById('cam-filter-btn'),
-            camShapeBtn: document.getElementById('cam-shape-btn'),
-            camShapeIcon: document.getElementById('cam-shape-icon'),
-            camFullscreenBtn: document.getElementById('cam-fullscreen-btn'),
-            camFullscreenIcon: document.getElementById('cam-fullscreen-icon'),
-            camMirrorBtn: document.getElementById('cam-mirror-btn'),
-            camNameBadge: document.getElementById('cam-name-badge'),
-            camDragHandle: document.getElementById('camera-drag-handle'),
+                const videoEl = document.getElementById('mobile-sender-video');
+                const statusEl = document.getElementById('mobile-status');
+                let currentFacingMode = 'environment'; // default to back camera
+                let localStream = null;
+                let peer = null;
 
-            // Device Sync Modal
-            btnOpenSync: document.getElementById('btn-open-sync'),
-            syncModal: document.getElementById('sync-modal'),
-            closeSyncModal: document.getElementById('close-sync-modal'),
-            syncCodeInput: document.getElementById('sync-code'),
-            btnSyncHost: document.getElementById('btn-sync-host'),
-            btnSyncClient: document.getElementById('btn-sync-client'),
-            syncStatusContainer: document.getElementById('sync-status-container'),
-            syncStatusText: document.getElementById('sync-status-text')
-        };
-
-        const pdfCtx = els.pdfCanvas.getContext('2d');
-        const drawCtx = els.drawCanvas.getContext('2d', { willReadFrequently: true });
-
-        // --- PDF.js Setup ---
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-        // --- Zooming & Panning Logic ---
-        const applyTransform = () => {
-            els.container.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoomLevel})`;
-        };
-
-        const resetTransform = () => {
-            state.zoomLevel = 1.0;
-            state.panX = 0;
-            state.panY = 0;
-            applyTransform();
-        };
-
-        if(els.zoomInBtn) els.zoomInBtn.addEventListener('click', () => {
-            state.zoomLevel = Math.min(4.0, state.zoomLevel + 0.2);
-            applyTransform();
-        });
-        
-        if(els.zoomOutBtn) els.zoomOutBtn.addEventListener('click', () => {
-            state.zoomLevel = Math.max(0.4, state.zoomLevel - 0.2);
-            applyTransform();
-        });
-
-        if(els.zoomResetBtn) els.zoomResetBtn.addEventListener('click', resetTransform);
-
-        // Pinch to Zoom & Pan
-        els.wrapper.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 2) {
-                state.isDrawing = false; 
-                state.isPanning = false; 
-                
-                state.initialPinchDist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-                state.initialPinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                state.initialPinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-            }
-        });
-        
-        els.wrapper.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 2 && state.initialPinchDist) {
-                e.preventDefault(); 
-                
-                const currentDist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-                const diff = currentDist - state.initialPinchDist;
-                state.zoomLevel = Math.max(0.4, Math.min(4.0, state.zoomLevel + diff * 0.005));
-                state.initialPinchDist = currentDist;
-
-                const currentCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                const currentCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                
-                if (state.initialPinchCenterX !== null) {
-                    state.panX += (currentCenterX - state.initialPinchCenterX);
-                    state.panY += (currentCenterY - state.initialPinchCenterY);
-                }
-                
-                state.initialPinchCenterX = currentCenterX;
-                state.initialPinchCenterY = currentCenterY;
-
-                applyTransform();
-            }
-        }, { passive: false });
-        
-        els.wrapper.addEventListener('touchend', () => { 
-            state.initialPinchDist = null; 
-            state.initialPinchCenterX = null;
-            state.initialPinchCenterY = null;
-        });
-
-        // --- Functions: PDF Handling ---
-        const syncCanvasSizes = (width, height) => {
-            els.pdfCanvas.width = width; els.pdfCanvas.height = height;
-            els.drawCanvas.width = width; els.drawCanvas.height = height;
-        };
-
-        const renderPage = (num) => {
-            state.pageIsRendering = true;
-            
-            state.pdfDoc.getPage(num).then(page => {
-                const containerWidth = els.wrapper.clientWidth * 0.85; 
-                const unscaledViewport = page.getViewport({ scale: 1.0 });
-                state.baseScale = containerWidth / unscaledViewport.width;
-                const viewport = page.getViewport({ scale: state.baseScale });
-
-                syncCanvasSizes(viewport.width, viewport.height);
-
-                page.render({ canvasContext: pdfCtx, viewport: viewport }).promise.then(() => {
-                    state.pageIsRendering = false;
-                    if (state.pageNumPending !== null) {
-                        renderPage(state.pageNumPending);
-                        state.pageNumPending = null;
+                const startMobileCam = (facingMode) => {
+                    if (localStream) {
+                        localStream.getTracks().forEach(track => track.stop());
                     }
+                    navigator.mediaDevices.getUserMedia({ video: { facingMode: facingMode }, audio: true })
+                        .then(stream => {
+                            localStream = stream;
+                            videoEl.srcObject = stream;
+                            
+                            // If connected to PC, dynamically switch the video track so connection isn't lost
+                            if (window.mobileCall && window.mobileCall.peerConnection) {
+                                const sender = window.mobileCall.peerConnection.getSenders().find(s => s.track.kind === 'video');
+                                if (sender) sender.replaceTrack(stream.getVideoTracks()[0]);
+                            }
+                        })
+                        .catch(err => {
+                            statusEl.innerHTML = '<i class="ph ph-warning text-red-400 text-xl"></i> <span>Camera Denied</span>';
+                            statusEl.classList.replace('border-white/10', 'border-red-500/50');
+                        });
+                };
+
+                // Start local mobile camera
+                startMobileCam(currentFacingMode);
+
+                // Connect to Host PC via WebRTC
+                peer = new Peer();
+                peer.on('open', (id) => {
+                    // Slight delay ensures video track is ready before sending
+                    setTimeout(() => {
+                        if (localStream) {
+                            window.mobileCall = peer.call('sblive-host-' + syncCode, localStream);
+                            statusEl.innerHTML = '<i class="ph ph-broadcast text-emerald-400 animate-pulse text-xl"></i> <span class="text-emerald-400">Live: Broadcasting</span>';
+                            statusEl.classList.replace('border-white/10', 'border-emerald-500/50');
+                        }
+                    }, 1000);
+                });
+                
+                peer.on('error', (err) => {
+                    statusEl.innerHTML = '<i class="ph ph-warning text-red-400 text-xl"></i> <span class="text-red-400">Host Not Found</span>';
+                    statusEl.classList.replace('border-white/10', 'border-red-500/50');
                 });
 
-                els.pageNum.textContent = num;
-                updatePaginationButtons();
-                clearCanvas();
-            });
-        };
-
-        const queueRenderPage = (num) => { state.pageIsRendering ? state.pageNumPending = num : renderPage(num); };
-        const updatePaginationButtons = () => {
-            els.prevBtn.disabled = state.pageNum <= 1;
-            els.nextBtn.disabled = state.pageNum >= state.pdfDoc.numPages;
-        };
-
-        els.upload.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file && file.type === 'application/pdf') {
-                const fileReader = new FileReader();
-                fileReader.onload = function() {
-                    pdfjsLib.getDocument(new Uint8Array(this.result)).promise.then(pdfDoc_ => {
-                        state.pdfDoc = pdfDoc_;
-                        els.pageCount.textContent = state.pdfDoc.numPages;
-                        state.pageNum = 1;
-                        
-                        els.instruction.classList.add('hidden');
-                        els.container.classList.remove('hidden');
-                        els.slideControls.classList.remove('opacity-0', 'pointer-events-none');
-                        state.isWhiteboard = false;
-                        updateWhiteboardBtnUI();
-                        resetTransform(); 
-                        
-                        renderPage(state.pageNum);
-                    });
-                };
-                fileReader.readAsArrayBuffer(file);
-            }
-        });
-
-        els.prevBtn.addEventListener('click', () => { if (state.pageNum > 1) { state.pageNum--; queueRenderPage(state.pageNum); } });
-        els.nextBtn.addEventListener('click', () => { if (state.pageNum < state.pdfDoc.numPages) { state.pageNum++; queueRenderPage(state.pageNum); } });
-
-        // --- Functions: Whiteboard Toggle ---
-        els.toggleWhiteboard.addEventListener('click', () => {
-            state.isWhiteboard = !state.isWhiteboard;
-            updateWhiteboardBtnUI();
-            resetTransform(); 
-            
-            if (state.isWhiteboard) {
-                els.slideControls.classList.add('opacity-0', 'pointer-events-none');
-                els.instruction.classList.add('hidden');
-                els.container.classList.remove('hidden');
-                
-                syncCanvasSizes(els.wrapper.clientWidth * 0.9, els.wrapper.clientHeight * 0.9);
-                pdfCtx.fillStyle = '#ffffff';
-                pdfCtx.fillRect(0, 0, els.pdfCanvas.width, els.pdfCanvas.height);
-                clearCanvas();
-            } else {
-                if (state.pdfDoc) {
-                    els.slideControls.classList.remove('opacity-0', 'pointer-events-none');
-                    renderPage(state.pageNum);
-                } else {
-                    els.container.classList.add('hidden');
-                    els.instruction.classList.remove('hidden');
-                }
-            }
-        });
-
-        const updateWhiteboardBtnUI = () => {
-            if (state.isWhiteboard) {
-                els.toggleWhiteboard.innerHTML = `<i class="ph ph-file-pdf"></i><span class="hidden md:inline">Back to Slides</span>`;
-                els.toggleWhiteboard.classList.replace('bg-white/5', 'bg-accent');
-                els.toggleWhiteboard.classList.add('text-white');
-            } else {
-                els.toggleWhiteboard.innerHTML = `<i class="ph ph-presentation-chart"></i><span class="hidden md:inline">Whiteboard</span>`;
-                els.toggleWhiteboard.classList.replace('bg-accent', 'bg-white/5');
-                els.toggleWhiteboard.classList.remove('text-white');
-            }
-        };
-
-        // --- Functions: Drawing ---
-        const getMousePos = (e) => {
-            const rect = els.drawCanvas.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            
-            const scaleX = els.drawCanvas.width / rect.width;
-            const scaleY = els.drawCanvas.height / rect.height;
-
-            return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
-        };
-
-        const drawBrushEffect = (pos, context = drawCtx) => {
-            if (state.currentTool === 'eraser') {
-                context.globalCompositeOperation = 'destination-out';
-                context.beginPath();
-                context.arc(pos.x, pos.y, state.currentSize * 3, 0, Math.PI * 2);
-                context.fill();
-                return;
-            }
-
-            context.globalCompositeOperation = 'source-over';
-            context.fillStyle = state.currentColor;
-            context.strokeStyle = state.currentColor;
-
-            if (state.brushType === 'solid') {
-                context.beginPath();
-                context.moveTo(state.lastX, state.lastY);
-                context.lineTo(pos.x, pos.y);
-                context.lineCap = 'round';
-                context.lineJoin = 'round';
-                context.lineWidth = state.currentSize;
-                context.stroke();
-            } else if (state.brushType === 'marker') {
-                context.globalAlpha = 0.3;
-                context.beginPath();
-                context.moveTo(state.lastX, state.lastY);
-                context.lineTo(pos.x, pos.y);
-                context.lineCap = 'square';
-                context.lineWidth = state.currentSize * 4;
-                context.stroke();
-                context.globalAlpha = 1.0;
-            } else if (state.brushType === 'spray') {
-                const radius = state.currentSize * 2.5;
-                for (let i = 0; i < state.currentSize * 3; i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const r = Math.random() * radius;
-                    context.fillRect(pos.x + Math.cos(angle)*r, pos.y + Math.sin(angle)*r, 1.5, 1.5);
-                }
-            }
-        };
-
-        const startAction = (e) => {
-            if (e.touches && e.touches.length > 1) return; 
-
-            if (state.currentTool === 'pan') {
-                state.isPanning = true;
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                state.panStartX = clientX - state.panX;
-                state.panStartY = clientY - state.panY;
-                els.drawCanvas.style.cursor = 'grabbing';
-                return;
-            }
-
-            e.preventDefault();
-            const pos = getMousePos(e);
-            
-            state.isDrawing = true;
-            state.lastX = pos.x;
-            state.lastY = pos.y;
-            drawBrushEffect(pos); 
-        };
-
-        const doAction = (e) => {
-            if (e.touches && e.touches.length > 1) return;
-
-            if (state.isPanning) {
-                e.preventDefault();
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                state.panX = clientX - state.panStartX;
-                state.panY = clientY - state.panStartY;
-                applyTransform();
-                return;
-            }
-
-            const pos = getMousePos(e);
-
-            if (state.isDrawing) {
-                e.preventDefault();
-                drawBrushEffect(pos);
-                state.lastX = pos.x;
-                state.lastY = pos.y;
-            }
-        };
-
-        const stopAction = (e) => {
-            if (state.isPanning) {
-                state.isPanning = false;
-                els.drawCanvas.style.cursor = 'grab';
-                return;
-            }
-            state.isDrawing = false;
-        };
-
-        const clearCanvas = () => {
-            drawCtx.clearRect(0, 0, els.drawCanvas.width, els.drawCanvas.height);
-        };
-
-        els.drawCanvas.addEventListener('mousedown', startAction);
-        window.addEventListener('mousemove', doAction);
-        window.addEventListener('mouseup', stopAction);
-
-        els.drawCanvas.addEventListener('touchstart', startAction, { passive: false });
-        window.addEventListener('touchmove', doAction, { passive: false });
-        window.addEventListener('touchend', stopAction);
-
-        // --- Functions: Toolbar Configuration ---
-        els.toolBtns.forEach(btn => {
-            if (btn.id === 'tool-clear') { btn.addEventListener('click', clearCanvas); return; }
-            
-            btn.addEventListener('click', () => {
-                els.toolBtns.forEach(b => { if(b.id !== 'tool-clear') b.classList.remove('selected'); });
-                btn.classList.add('selected');
-                
-                if (btn.id === 'tool-pen') { 
-                    state.currentTool = 'pen'; 
-                    state.brushType = 'solid'; 
-                    els.drawCanvas.style.cursor = 'crosshair'; 
-                }
-                if (btn.id === 'tool-highlight') { 
-                    state.currentTool = 'pen'; 
-                    state.brushType = 'marker'; 
-                    els.drawCanvas.style.cursor = 'text'; 
-                }
-                if (btn.id === 'tool-pan') { state.currentTool = 'pan'; els.drawCanvas.style.cursor = 'grab'; }
-                if (btn.id === 'tool-eraser') { state.currentTool = 'eraser'; els.drawCanvas.style.cursor = 'no-drop'; }
-            });
-        });
-
-        els.brushBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                els.brushBtns.forEach(b => b.classList.remove('selected'));
-                btn.classList.add('selected');
-                state.brushType = btn.dataset.brush;
-                if(state.currentTool !== 'pen') document.getElementById('tool-pen').click();
-            });
-        });
-
-        const setColor = (color) => {
-            state.currentColor = color;
-            els.colorBtns.forEach(b => {
-                b.classList.remove('selected');
-                b.style.boxShadow = 'none';
-            });
-            els.customColorWrapper.classList.remove('border-white', 'scale-125', 'shadow-lg');
-            
-            if(state.currentTool !== 'pen' && state.currentTool !== 'highlight') {
-                 document.getElementById(state.brushType === 'marker' ? 'tool-highlight' : 'tool-pen').click();
-            }
-        };
-
-        els.colorBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                setColor(btn.dataset.color);
-                btn.classList.add('selected');
-                btn.style.boxShadow = `0 0 15px ${btn.dataset.color}, 0 0 5px white`;
-            });
-        });
-
-        els.customColorInput.addEventListener('input', (e) => {
-            setColor(e.target.value);
-            els.customColorWrapper.classList.add('border-white', 'scale-125', 'shadow-[0_0_15px_rgba(255,255,255,0.5)]');
-        });
-
-        els.sizeSlider.addEventListener('input', (e) => { state.currentSize = parseInt(e.target.value); });
-
-        let resizeTimer;
-        window.addEventListener('resize', () => {
-            clearTimeout(resizeTimer);
-            resizeTimer = setTimeout(() => {
-                if (state.isWhiteboard) {
-                    const temp = document.createElement('canvas');
-                    temp.width = els.drawCanvas.width; temp.height = els.drawCanvas.height;
-                    temp.getContext('2d').drawImage(els.drawCanvas, 0, 0);
-
-                    syncCanvasSizes(els.wrapper.clientWidth * 0.9, els.wrapper.clientHeight * 0.9);
-                    pdfCtx.fillStyle = '#ffffff'; pdfCtx.fillRect(0, 0, els.pdfCanvas.width, els.pdfCanvas.height);
-                    drawCtx.drawImage(temp, 0, 0, els.drawCanvas.width, els.drawCanvas.height);
-                } else if (state.pdfDoc) {
-                    renderPage(state.pageNum);
-                }
-            }, 200);
-        });
-
-        // --- Functions: Camera Setup & Dragging ---
-        const updateCameraUI = () => {
-            if (state.isCamHidden) {
-                els.camWindow.classList.add('hidden');
-                els.toggleCamera.classList.replace('bg-primary/20', 'bg-white/5');
-                els.toggleCamera.classList.replace('text-primary', 'text-gray-400');
-                els.toggleCamera.classList.replace('border-primary/30', 'border-white/10');
-                els.cameraIcon.classList.replace('ph-video-camera', 'ph-video-camera-slash');
-                return;
-            }
-
-            els.camWindow.classList.remove('hidden');
-            els.toggleCamera.classList.replace('bg-white/5', 'bg-primary/20');
-            els.toggleCamera.classList.replace('text-gray-400', 'text-primary');
-            els.toggleCamera.classList.replace('border-white/10', 'border-primary/30');
-            els.cameraIcon.classList.replace('ph-video-camera-slash', 'ph-video-camera');
-
-            let classes = 'z-50 flex flex-col group overflow-hidden transition-all duration-300 ';
-            
-            if (state.isFullscreenCam) {
-                classes += 'fixed inset-0 w-full h-full bg-black rounded-none ';
-                els.camFullscreenIcon.className = 'ph ph-corners-in text-lg';
-                els.camNameBadge.classList.remove('opacity-0', 'pointer-events-none');
-                els.video.style.borderRadius = '0';
-                
-                els.camWindow.style.left = '0px';
-                els.camWindow.style.top = '0px';
-                els.camWindow.style.bottom = 'auto';
-                els.camWindow.style.right = 'auto';
-            } else {
-                classes += 'absolute cursor-grab active:cursor-grabbing shadow-[0_10px_40px_rgba(0,0,0,0.5)] ';
-                els.camFullscreenIcon.className = 'ph ph-corners-out text-lg';
-
-                if (state.isCircularCam) {
-                    classes += 'w-56 h-56 rounded-full bg-transparent border-none ';
-                    els.camShapeIcon.className = 'ph ph-rectangle text-lg';
-                    els.camNameBadge.classList.add('opacity-0', 'pointer-events-none');
-                    els.video.style.borderRadius = '50%'; 
-                } else {
-                    classes += 'w-72 h-48 rounded-2xl bg-gray-900 border border-primary/50 ';
-                    els.camShapeIcon.className = 'ph ph-user-focus text-lg';
-                    els.camNameBadge.classList.remove('opacity-0', 'pointer-events-none');
-                    els.video.style.borderRadius = '0'; 
-                }
-
-                if (els.camWindow.style.left === '0px' && els.camWindow.style.top === '0px' && state.camPreFullscreenPos.left !== '0px') {
-                    els.camWindow.style.left = state.camPreFullscreenPos.left;
-                    els.camWindow.style.top = state.camPreFullscreenPos.top;
-                    els.camWindow.style.bottom = state.camPreFullscreenPos.bottom;
-                    els.camWindow.style.right = state.camPreFullscreenPos.right;
-                }
-            }
-
-            // Apply Mirror state
-            els.video.style.transform = state.isMirrored ? 'scaleX(-1)' : 'scaleX(1)';
-
-            els.camWindow.className = classes;
-        };
-
-        // Mirror Toggle logic
-        els.camMirrorBtn.addEventListener('mousedown', (e) => e.stopPropagation()); 
-        els.camMirrorBtn.addEventListener('touchstart', (e) => e.stopPropagation());
-        els.camMirrorBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            state.isMirrored = !state.isMirrored;
-            updateCameraUI();
-        });
-
-        els.toggleCamera.addEventListener('click', () => {
-            state.isCamHidden = !state.isCamHidden;
-            updateCameraUI();
-        });
-
-        // Request local stream on startup
-        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-            .then(stream => { els.video.srcObject = stream; els.camStatus.classList.add('hidden'); })
-            .catch(err => { els.camStatus.querySelector('span').textContent = "Camera Access Denied"; });
-
-        // Camera Filters
-        const camFilters = [
-            'none',
-            'grayscale(100%)',
-            'sepia(100%)',
-            'contrast(130%) saturate(150%)',
-            'brightness(120%)',
-            'hue-rotate(90deg)'
-        ];
-        let currentFilterIdx = 0;
-
-        els.camFilterBtn.addEventListener('mousedown', (e) => e.stopPropagation()); 
-        els.camFilterBtn.addEventListener('touchstart', (e) => e.stopPropagation()); 
-        els.camFilterBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            currentFilterIdx = (currentFilterIdx + 1) % camFilters.length;
-            els.video.style.filter = camFilters[currentFilterIdx];
-        });
-
-        els.camShapeBtn.addEventListener('mousedown', (e) => e.stopPropagation()); 
-        els.camShapeBtn.addEventListener('touchstart', (e) => e.stopPropagation());
-        els.camShapeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (state.isFullscreenCam) return; 
-            state.isCircularCam = !state.isCircularCam;
-            updateCameraUI();
-        });
-
-        els.camFullscreenBtn.addEventListener('mousedown', (e) => e.stopPropagation()); 
-        els.camFullscreenBtn.addEventListener('touchstart', (e) => e.stopPropagation());
-        els.camFullscreenBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            state.isFullscreenCam = !state.isFullscreenCam;
-            if (state.isFullscreenCam) {
-                state.camPreFullscreenPos = {
-                    left: els.camWindow.style.left,
-                    top: els.camWindow.style.top,
-                    bottom: els.camWindow.style.bottom,
-                    right: els.camWindow.style.right
-                };
-            }
-            updateCameraUI();
-        });
-
-        let isDraggingCam = false;
-        let camStartX, camStartY, camInitialLeft, camInitialTop;
-
-        els.camDragHandle.addEventListener('mousedown', (e) => {
-            if (state.isFullscreenCam) return;
-            isDraggingCam = true;
-            els.camWindow.classList.add('transition-none');
-            const rect = els.camWindow.getBoundingClientRect();
-            camInitialLeft = rect.left; camInitialTop = rect.top;
-            camStartX = e.clientX; camStartY = e.clientY;
-        });
-
-        window.addEventListener('mousemove', (e) => {
-            if (!isDraggingCam || state.isFullscreenCam) return;
-            let newLeft = camInitialLeft + (e.clientX - camStartX);
-            let newTop = camInitialTop + (e.clientY - camStartY);
-            newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - els.camWindow.offsetWidth));
-            newTop = Math.max(0, Math.min(newTop, window.innerHeight - els.camWindow.offsetHeight));
-            
-            els.camWindow.style.bottom = 'auto'; els.camWindow.style.right = 'auto';
-            els.camWindow.style.left = `${newLeft}px`; els.camWindow.style.top = `${newTop}px`;
-        });
-        
-        window.addEventListener('mouseup', () => { 
-            if(isDraggingCam) { 
-                isDraggingCam = false; 
-                els.camWindow.classList.remove('transition-none'); 
-            }
-        });
-
-        els.camWindow.style.bottom = '7rem';
-        els.camWindow.style.right = '2rem';
-        updateCameraUI();
-
-        // --- Functions: Device Syncing using PeerJS ---
-        let peer = null;
-        let currentCall = null;
-        
-        const setSyncStatus = (msg, iconHtml) => {
-            els.syncStatusContainer.classList.remove('hidden');
-            els.syncStatusContainer.innerHTML = `${iconHtml}<span class="text-white">${msg}</span>`;
-        };
-
-        els.btnOpenSync.addEventListener('click', () => {
-            els.syncModal.classList.remove('hidden');
-            els.syncStatusContainer.classList.add('hidden');
-        });
-
-        els.closeSyncModal.addEventListener('click', () => {
-            els.syncModal.classList.add('hidden');
-        });
-
-        // HOST: Receives the camera feed
-        els.btnSyncHost.addEventListener('click', () => {
-            const code = els.syncCodeInput.value.trim().toLowerCase();
-            if(!code) {
-                setSyncStatus("Please enter a class code first.", '<i class="ph ph-warning text-yellow-400 inline-block mr-2"></i>');
-                return;
-            }
-            
-            setSyncStatus("Registering Host session...", '<i class="ph ph-spinner animate-spin text-emerald-400 inline-block mr-2"></i>');
-            
-            if(peer) peer.destroy();
-            peer = new Peer('sblive-host-' + code);
-            
-            peer.on('open', (id) => {
-                setSyncStatus(`Waiting for mobile device to join code: <b>${code.toUpperCase()}</b>`, '<i class="ph ph-hourglass-high animate-pulse text-emerald-400 inline-block mr-2"></i>');
-            });
-            
-            peer.on('call', (call) => {
-                currentCall = call;
-                call.answer(); // Answer without sending a local stream
-                setSyncStatus("Mobile connected! Receiving video...", '<i class="ph ph-check-circle text-emerald-400 inline-block mr-2"></i>');
-                
-                call.on('stream', (remoteStream) => {
-                    els.video.srcObject = remoteStream;
-                    els.camStatus.classList.add('hidden');
-                    
-                    // Default to un-mirrored for external cameras (they face outward)
-                    state.isMirrored = false;
-                    
-                    state.isCamHidden = false;
-                    updateCameraUI();
-                    
-                    setTimeout(() => { els.syncModal.classList.add('hidden'); }, 1500);
-                });
-            });
-            
-            peer.on('error', (err) => {
-                setSyncStatus(`Connection Error: ${err.type}`, '<i class="ph ph-warning text-red-400 inline-block mr-2"></i>');
-            });
-        });
-
-        // CLIENT: Sends the camera feed
-        els.btnSyncClient.addEventListener('click', () => {
-            const code = els.syncCodeInput.value.trim().toLowerCase();
-            if(!code) {
-                setSyncStatus("Please enter a class code first.", '<i class="ph ph-warning text-yellow-400 inline-block mr-2"></i>');
-                return;
-            }
-            
-            setSyncStatus("Accessing mobile camera...", '<i class="ph ph-spinner animate-spin text-primary inline-block mr-2"></i>');
-            
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: true })
-                .then(stream => {
-                    els.video.srcObject = stream;
-                    els.camStatus.classList.add('hidden');
-                    
-                    // External cameras face outward, no mirror needed usually
-                    state.isMirrored = false;
-                    
-                    state.isCamHidden = false;
-                    updateCameraUI();
-                    
-                    setSyncStatus("Connecting to Host...", '<i class="ph ph-spinner animate-spin text-primary inline-block mr-2"></i>');
-                    
+                document.getElementById('mobile-stop').addEventListener('click', () => {
+                    if(localStream) localStream.getTracks().forEach(t => t.stop());
                     if(peer) peer.destroy();
-                    peer = new Peer(); // Random ID for client
+                    // Strip the sync URL parameter to return to normal app locally
+                    window.location.href = window.location.pathname; 
+                });
+
+                document.getElementById('mobile-flip').addEventListener('click', () => {
+                    currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+                    startMobileCam(currentFacingMode);
+                    // Mirror UI for front-facing cam to feel natural
+                    videoEl.style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+                });
+
+                return; // HALT EXECUTION of the main app logic below
+            }
+
+
+            // ==========================================
+            // MODE 2: MAIN DESKTOP APP (Host)
+            // ==========================================
+            
+            // --- State Management ---
+            const state = {
+                pdfDoc: null,
+                pageNum: 1,
+                pageIsRendering: false,
+                pageNumPending: null,
+                baseScale: 1.5,
+                
+                zoomLevel: 1.0,
+                panX: 0,
+                panY: 0,
+                isPanning: false,
+                panStartX: 0,
+                panStartY: 0,
+
+                isWhiteboard: false,
+                
+                isDrawing: false,
+                currentTool: 'pen', 
+                brushType: 'solid', 
+                currentColor: '#ef4444',
+                currentSize: 4,
+                lastX: 0,
+                lastY: 0,
+                
+                initialPinchDist: null,
+                initialPinchCenterX: null,
+                initialPinchCenterY: null,
+
+                isCamHidden: false,
+                isCircularCam: false,
+                isFullscreenCam: false,
+                isMirrored: true, // Default true for built-in cams
+                camPreFullscreenPos: { left: 'auto', top: 'auto', bottom: '7rem', right: '2rem' }
+            };
+
+            // --- DOM Elements ---
+            const els = {
+                upload: document.getElementById('pdf-upload'),
+                pdfCanvas: document.getElementById('pdf-canvas'),
+                drawCanvas: document.getElementById('draw-canvas'),
+                container: document.getElementById('canvases-container'),
+                wrapper: document.getElementById('canvas-wrapper'),
+                instruction: document.getElementById('instruction-overlay'),
+                
+                prevBtn: document.getElementById('prev-page'),
+                nextBtn: document.getElementById('next-page'),
+                pageNum: document.getElementById('page-num'),
+                pageCount: document.getElementById('page-count'),
+                slideControls: document.getElementById('slide-controls'),
+                toggleWhiteboard: document.getElementById('toggle-whiteboard-btn'),
+                zoomInBtn: document.getElementById('zoom-in-btn'),
+                zoomOutBtn: document.getElementById('zoom-out-btn'),
+                zoomResetBtn: document.getElementById('zoom-reset-btn'),
+                
+                toolBtns: document.querySelectorAll('.tool-btn'),
+                brushBtns: document.querySelectorAll('.brush-btn'),
+                colorBtns: document.querySelectorAll('.color-btn'),
+                customColorInput: document.getElementById('custom-color-input'),
+                customColorWrapper: document.getElementById('custom-color-wrapper'),
+                sizeSlider: document.getElementById('size-slider'),
+                btnClear: document.getElementById('tool-clear'),
+                toolHighlight: document.getElementById('tool-highlight'),
+                
+                camWindow: document.getElementById('camera-window'),
+                video: document.getElementById('webcam'),
+                camStatus: document.getElementById('cam-status'),
+                toggleCamera: document.getElementById('toggle-camera-btn'),
+                cameraIcon: document.getElementById('camera-icon'),
+                camFilterBtn: document.getElementById('cam-filter-btn'),
+                camShapeBtn: document.getElementById('cam-shape-btn'),
+                camShapeIcon: document.getElementById('cam-shape-icon'),
+                camFullscreenBtn: document.getElementById('cam-fullscreen-btn'),
+                camFullscreenIcon: document.getElementById('cam-fullscreen-icon'),
+                camMirrorBtn: document.getElementById('cam-mirror-btn'),
+                camNameBadge: document.getElementById('cam-name-badge'),
+                camDragHandle: document.getElementById('camera-drag-handle'),
+                
+                // QR UI
+                camQrBtn: document.getElementById('cam-qr-btn'),
+                camQrOverlay: document.getElementById('cam-qr-overlay'),
+                qrCodeContainer: document.getElementById('qrcode-container'),
+                cancelQrBtn: document.getElementById('cancel-qr-btn')
+            };
+
+            const pdfCtx = els.pdfCanvas.getContext('2d');
+            const drawCtx = els.drawCanvas.getContext('2d', { willReadFrequently: true });
+            let peer = null; // Host Peer connection
+
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+            // --- Zooming & Panning Logic ---
+            const applyTransform = () => {
+                els.container.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoomLevel})`;
+            };
+
+            const resetTransform = () => {
+                state.zoomLevel = 1.0;
+                state.panX = 0;
+                state.panY = 0;
+                applyTransform();
+            };
+
+            if(els.zoomInBtn) els.zoomInBtn.addEventListener('click', () => {
+                state.zoomLevel = Math.min(4.0, state.zoomLevel + 0.2);
+                applyTransform();
+            });
+            
+            if(els.zoomOutBtn) els.zoomOutBtn.addEventListener('click', () => {
+                state.zoomLevel = Math.max(0.4, state.zoomLevel - 0.2);
+                applyTransform();
+            });
+
+            if(els.zoomResetBtn) els.zoomResetBtn.addEventListener('click', resetTransform);
+
+            els.wrapper.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2) {
+                    state.isDrawing = false; 
+                    state.isPanning = false; 
                     
-                    peer.on('open', (id) => {
-                        const call = peer.call('sblive-host-' + code, stream);
-                        currentCall = call;
-                        
-                        setSyncStatus("Broadcasting to Main Screen!", '<i class="ph ph-broadcast text-emerald-400 animate-pulse inline-block mr-2"></i>');
-                        setTimeout(() => { els.syncModal.classList.add('hidden'); }, 2000);
-                        
-                        // To keep UI clean for the mobile sender, we can auto-fullscreen
-                        if (!state.isFullscreenCam) {
-                            els.camFullscreenBtn.click();
+                    state.initialPinchDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    state.initialPinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    state.initialPinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                }
+            });
+            
+            els.wrapper.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 2 && state.initialPinchDist) {
+                    e.preventDefault(); 
+                    const currentDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    const diff = currentDist - state.initialPinchDist;
+                    state.zoomLevel = Math.max(0.4, Math.min(4.0, state.zoomLevel + diff * 0.005));
+                    state.initialPinchDist = currentDist;
+
+                    const currentCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const currentCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    
+                    if (state.initialPinchCenterX !== null) {
+                        state.panX += (currentCenterX - state.initialPinchCenterX);
+                        state.panY += (currentCenterY - state.initialPinchCenterY);
+                    }
+                    
+                    state.initialPinchCenterX = currentCenterX;
+                    state.initialPinchCenterY = currentCenterY;
+
+                    applyTransform();
+                }
+            }, { passive: false });
+            
+            els.wrapper.addEventListener('touchend', () => { 
+                state.initialPinchDist = null; 
+                state.initialPinchCenterX = null;
+                state.initialPinchCenterY = null;
+            });
+
+            // --- Functions: PDF Handling ---
+            const syncCanvasSizes = (width, height) => {
+                els.pdfCanvas.width = width; els.pdfCanvas.height = height;
+                els.drawCanvas.width = width; els.drawCanvas.height = height;
+            };
+
+            const renderPage = (num) => {
+                state.pageIsRendering = true;
+                state.pdfDoc.getPage(num).then(page => {
+                    const containerWidth = els.wrapper.clientWidth * 0.85; 
+                    const unscaledViewport = page.getViewport({ scale: 1.0 });
+                    state.baseScale = containerWidth / unscaledViewport.width;
+                    const viewport = page.getViewport({ scale: state.baseScale });
+
+                    syncCanvasSizes(viewport.width, viewport.height);
+
+                    page.render({ canvasContext: pdfCtx, viewport: viewport }).promise.then(() => {
+                        state.pageIsRendering = false;
+                        if (state.pageNumPending !== null) {
+                            renderPage(state.pageNumPending);
+                            state.pageNumPending = null;
                         }
                     });
-                    
-                    peer.on('error', (err) => {
-                        setSyncStatus("Host not found. Ensure PC is waiting.", '<i class="ph ph-warning text-red-400 inline-block mr-2"></i>');
-                    });
-                })
-                .catch(err => {
-                    setSyncStatus("Camera Access Denied by browser.", '<i class="ph ph-warning text-red-400 inline-block mr-2"></i>');
-                });
-        });
 
+                    els.pageNum.textContent = num;
+                    updatePaginationButtons();
+                    clearCanvas();
+                });
+            };
+
+            const queueRenderPage = (num) => { state.pageIsRendering ? state.pageNumPending = num : renderPage(num); };
+            const updatePaginationButtons = () => {
+                els.prevBtn.disabled = state.pageNum <= 1;
+                els.nextBtn.disabled = state.pageNum >= state.pdfDoc.numPages;
+            };
+
+            els.upload.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file && file.type === 'application/pdf') {
+                    const fileReader = new FileReader();
+                    fileReader.onload = function() {
+                        pdfjsLib.getDocument(new Uint8Array(this.result)).promise.then(pdfDoc_ => {
+                            state.pdfDoc = pdfDoc_;
+                            els.pageCount.textContent = state.pdfDoc.numPages;
+                            state.pageNum = 1;
+                            
+                            els.instruction.classList.add('hidden');
+                            els.container.classList.remove('hidden');
+                            els.slideControls.classList.remove('opacity-0', 'pointer-events-none');
+                            state.isWhiteboard = false;
+                            updateWhiteboardBtnUI();
+                            resetTransform(); 
+                            
+                            renderPage(state.pageNum);
+                        });
+                    };
+                    fileReader.readAsArrayBuffer(file);
+                }
+            });
+
+            els.prevBtn.addEventListener('click', () => { if (state.pageNum > 1) { state.pageNum--; queueRenderPage(state.pageNum); } });
+            els.nextBtn.addEventListener('click', () => { if (state.pageNum < state.pdfDoc.numPages) { state.pageNum++; queueRenderPage(state.pageNum); } });
+
+            // --- Functions: Whiteboard Toggle ---
+            els.toggleWhiteboard.addEventListener('click', () => {
+                state.isWhiteboard = !state.isWhiteboard;
+                updateWhiteboardBtnUI();
+                resetTransform(); 
+                
+                if (state.isWhiteboard) {
+                    els.slideControls.classList.add('opacity-0', 'pointer-events-none');
+                    els.instruction.classList.add('hidden');
+                    els.container.classList.remove('hidden');
+                    
+                    syncCanvasSizes(els.wrapper.clientWidth * 0.9, els.wrapper.clientHeight * 0.9);
+                    pdfCtx.fillStyle = '#ffffff';
+                    pdfCtx.fillRect(0, 0, els.pdfCanvas.width, els.pdfCanvas.height);
+                    clearCanvas();
+                } else {
+                    if (state.pdfDoc) {
+                        els.slideControls.classList.remove('opacity-0', 'pointer-events-none');
+                        renderPage(state.pageNum);
+                    } else {
+                        els.container.classList.add('hidden');
+                        els.instruction.classList.remove('hidden');
+                    }
+                }
+            });
+
+            const updateWhiteboardBtnUI = () => {
+                if (state.isWhiteboard) {
+                    els.toggleWhiteboard.innerHTML = `<i class="ph ph-file-pdf"></i><span class="hidden md:inline">Back to Slides</span>`;
+                    els.toggleWhiteboard.classList.replace('bg-white/5', 'bg-accent');
+                    els.toggleWhiteboard.classList.add('text-white');
+                } else {
+                    els.toggleWhiteboard.innerHTML = `<i class="ph ph-presentation-chart"></i><span class="hidden md:inline">Whiteboard</span>`;
+                    els.toggleWhiteboard.classList.replace('bg-accent', 'bg-white/5');
+                    els.toggleWhiteboard.classList.remove('text-white');
+                }
+            };
+
+            // --- Functions: Drawing ---
+            const getMousePos = (e) => {
+                const rect = els.drawCanvas.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                
+                const scaleX = els.drawCanvas.width / rect.width;
+                const scaleY = els.drawCanvas.height / rect.height;
+
+                return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+            };
+
+            const drawBrushEffect = (pos, context = drawCtx) => {
+                if (state.currentTool === 'eraser') {
+                    context.globalCompositeOperation = 'destination-out';
+                    context.beginPath();
+                    context.arc(pos.x, pos.y, state.currentSize * 3, 0, Math.PI * 2);
+                    context.fill();
+                    return;
+                }
+
+                context.globalCompositeOperation = 'source-over';
+                context.fillStyle = state.currentColor;
+                context.strokeStyle = state.currentColor;
+
+                if (state.brushType === 'solid') {
+                    context.beginPath();
+                    context.moveTo(state.lastX, state.lastY);
+                    context.lineTo(pos.x, pos.y);
+                    context.lineCap = 'round';
+                    context.lineJoin = 'round';
+                    context.lineWidth = state.currentSize;
+                    context.stroke();
+                } else if (state.brushType === 'marker') {
+                    context.globalAlpha = 0.3;
+                    context.beginPath();
+                    context.moveTo(state.lastX, state.lastY);
+                    context.lineTo(pos.x, pos.y);
+                    context.lineCap = 'square';
+                    context.lineWidth = state.currentSize * 4;
+                    context.stroke();
+                    context.globalAlpha = 1.0;
+                } else if (state.brushType === 'spray') {
+                    const radius = state.currentSize * 2.5;
+                    for (let i = 0; i < state.currentSize * 3; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const r = Math.random() * radius;
+                        context.fillRect(pos.x + Math.cos(angle)*r, pos.y + Math.sin(angle)*r, 1.5, 1.5);
+                    }
+                }
+            };
+
+            const startAction = (e) => {
+                if (e.touches && e.touches.length > 1) return; 
+
+                if (state.currentTool === 'pan') {
+                    state.isPanning = true;
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    state.panStartX = clientX - state.panX;
+                    state.panStartY = clientY - state.panY;
+                    els.drawCanvas.style.cursor = 'grabbing';
+                    return;
+                }
+
+                e.preventDefault();
+                const pos = getMousePos(e);
+                
+                state.isDrawing = true;
+                state.lastX = pos.x;
+                state.lastY = pos.y;
+                drawBrushEffect(pos); 
+            };
+
+            const doAction = (e) => {
+                if (e.touches && e.touches.length > 1) return;
+
+                if (state.isPanning) {
+                    e.preventDefault();
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    state.panX = clientX - state.panStartX;
+                    state.panY = clientY - state.panStartY;
+                    applyTransform();
+                    return;
+                }
+
+                const pos = getMousePos(e);
+
+                if (state.isDrawing) {
+                    e.preventDefault();
+                    drawBrushEffect(pos);
+                    state.lastX = pos.x;
+                    state.lastY = pos.y;
+                }
+            };
+
+            const stopAction = (e) => {
+                if (state.isPanning) {
+                    state.isPanning = false;
+                    els.drawCanvas.style.cursor = 'grab';
+                    return;
+                }
+                state.isDrawing = false;
+            };
+
+            const clearCanvas = () => {
+                drawCtx.clearRect(0, 0, els.drawCanvas.width, els.drawCanvas.height);
+            };
+
+            els.drawCanvas.addEventListener('mousedown', startAction);
+            window.addEventListener('mousemove', doAction);
+            window.addEventListener('mouseup', stopAction);
+
+            els.drawCanvas.addEventListener('touchstart', startAction, { passive: false });
+            window.addEventListener('touchmove', doAction, { passive: false });
+            window.addEventListener('touchend', stopAction);
+
+            // --- Functions: Toolbar Configuration ---
+            els.toolBtns.forEach(btn => {
+                if (btn.id === 'tool-clear') { btn.addEventListener('click', clearCanvas); return; }
+                
+                btn.addEventListener('click', () => {
+                    els.toolBtns.forEach(b => { if(b.id !== 'tool-clear') b.classList.remove('selected'); });
+                    btn.classList.add('selected');
+                    
+                    if (btn.id === 'tool-pen') { 
+                        state.currentTool = 'pen'; 
+                        state.brushType = 'solid'; 
+                        els.drawCanvas.style.cursor = 'crosshair'; 
+                    }
+                    if (btn.id === 'tool-highlight') { 
+                        state.currentTool = 'pen'; 
+                        state.brushType = 'marker'; 
+                        els.drawCanvas.style.cursor = 'text'; 
+                    }
+                    if (btn.id === 'tool-pan') { state.currentTool = 'pan'; els.drawCanvas.style.cursor = 'grab'; }
+                    if (btn.id === 'tool-eraser') { state.currentTool = 'eraser'; els.drawCanvas.style.cursor = 'no-drop'; }
+                });
+            });
+
+            els.brushBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    els.brushBtns.forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    state.brushType = btn.dataset.brush;
+                    if(state.currentTool !== 'pen') document.getElementById('tool-pen').click();
+                });
+            });
+
+            const setColor = (color) => {
+                state.currentColor = color;
+                els.colorBtns.forEach(b => {
+                    b.classList.remove('selected');
+                    b.style.boxShadow = 'none';
+                });
+                els.customColorWrapper.classList.remove('border-white', 'scale-125', 'shadow-lg');
+                
+                if(state.currentTool !== 'pen' && state.currentTool !== 'highlight') {
+                     document.getElementById(state.brushType === 'marker' ? 'tool-highlight' : 'tool-pen').click();
+                }
+            };
+
+            els.colorBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    setColor(btn.dataset.color);
+                    btn.classList.add('selected');
+                    btn.style.boxShadow = `0 0 15px ${btn.dataset.color}, 0 0 5px white`;
+                });
+            });
+
+            els.customColorInput.addEventListener('input', (e) => {
+                setColor(e.target.value);
+                els.customColorWrapper.classList.add('border-white', 'scale-125', 'shadow-[0_0_15px_rgba(255,255,255,0.5)]');
+            });
+
+            els.sizeSlider.addEventListener('input', (e) => { state.currentSize = parseInt(e.target.value); });
+
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(() => {
+                    if (state.isWhiteboard) {
+                        const temp = document.createElement('canvas');
+                        temp.width = els.drawCanvas.width; temp.height = els.drawCanvas.height;
+                        temp.getContext('2d').drawImage(els.drawCanvas, 0, 0);
+
+                        syncCanvasSizes(els.wrapper.clientWidth * 0.9, els.wrapper.clientHeight * 0.9);
+                        pdfCtx.fillStyle = '#ffffff'; pdfCtx.fillRect(0, 0, els.pdfCanvas.width, els.pdfCanvas.height);
+                        drawCtx.drawImage(temp, 0, 0, els.drawCanvas.width, els.drawCanvas.height);
+                    } else if (state.pdfDoc) {
+                        renderPage(state.pageNum);
+                    }
+                }, 200);
+            });
+
+            // --- Functions: Camera Setup & Dragging ---
+            const updateCameraUI = () => {
+                if (state.isCamHidden) {
+                    els.camWindow.classList.add('hidden');
+                    els.toggleCamera.classList.replace('bg-primary/20', 'bg-white/5');
+                    els.toggleCamera.classList.replace('text-primary', 'text-gray-400');
+                    els.toggleCamera.classList.replace('border-primary/30', 'border-white/10');
+                    els.cameraIcon.classList.replace('ph-video-camera', 'ph-video-camera-slash');
+                    return;
+                }
+
+                els.camWindow.classList.remove('hidden');
+                els.toggleCamera.classList.replace('bg-white/5', 'bg-primary/20');
+                els.toggleCamera.classList.replace('text-gray-400', 'text-primary');
+                els.toggleCamera.classList.replace('border-white/10', 'border-primary/30');
+                els.cameraIcon.classList.replace('ph-video-camera-slash', 'ph-video-camera');
+
+                let classes = 'z-50 flex flex-col group overflow-hidden transition-all duration-300 ';
+                
+                if (state.isFullscreenCam) {
+                    classes += 'fixed inset-0 w-full h-full bg-black rounded-none ';
+                    els.camFullscreenIcon.className = 'ph ph-corners-in text-lg';
+                    els.camNameBadge.classList.remove('opacity-0', 'pointer-events-none');
+                    els.video.style.borderRadius = '0';
+                    
+                    els.camWindow.style.left = '0px';
+                    els.camWindow.style.top = '0px';
+                    els.camWindow.style.bottom = 'auto';
+                    els.camWindow.style.right = 'auto';
+                } else {
+                    classes += 'absolute cursor-grab active:cursor-grabbing shadow-[0_10px_40px_rgba(0,0,0,0.5)] ';
+                    els.camFullscreenIcon.className = 'ph ph-corners-out text-lg';
+
+                    if (state.isCircularCam) {
+                        classes += 'w-56 h-56 rounded-full bg-transparent border-none ';
+                        els.camShapeIcon.className = 'ph ph-rectangle text-lg';
+                        els.camNameBadge.classList.add('opacity-0', 'pointer-events-none');
+                        els.video.style.borderRadius = '50%'; 
+                    } else {
+                        classes += 'w-72 h-48 rounded-2xl bg-gray-900 border border-primary/50 ';
+                        els.camShapeIcon.className = 'ph ph-user-focus text-lg';
+                        els.camNameBadge.classList.remove('opacity-0', 'pointer-events-none');
+                        els.video.style.borderRadius = '0'; 
+                    }
+
+                    if (els.camWindow.style.left === '0px' && els.camWindow.style.top === '0px' && state.camPreFullscreenPos.left !== '0px') {
+                        els.camWindow.style.left = state.camPreFullscreenPos.left;
+                        els.camWindow.style.top = state.camPreFullscreenPos.top;
+                        els.camWindow.style.bottom = state.camPreFullscreenPos.bottom;
+                        els.camWindow.style.right = state.camPreFullscreenPos.right;
+                    }
+                }
+
+                els.video.style.transform = state.isMirrored ? 'scaleX(-1)' : 'scaleX(1)';
+                els.camWindow.className = classes;
+            };
+
+            els.camMirrorBtn.addEventListener('mousedown', (e) => e.stopPropagation()); 
+            els.camMirrorBtn.addEventListener('touchstart', (e) => e.stopPropagation());
+            els.camMirrorBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                state.isMirrored = !state.isMirrored;
+                updateCameraUI();
+            });
+
+            els.toggleCamera.addEventListener('click', () => {
+                state.isCamHidden = !state.isCamHidden;
+                updateCameraUI();
+            });
+
+            // Start local web camera helper
+            const startLocalCamera = () => {
+                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                    .then(stream => { 
+                        els.video.srcObject = stream; 
+                        els.camStatus.classList.add('hidden'); 
+                    })
+                    .catch(err => { 
+                        els.camStatus.querySelector('span').textContent = "Camera Access Denied"; 
+                        els.camStatus.classList.remove('hidden'); 
+                    });
+            };
+            
+            // Request local stream on startup
+            startLocalCamera();
+
+            const camFilters = [
+                'none',
+                'grayscale(100%)',
+                'sepia(100%)',
+                'contrast(130%) saturate(150%)',
+                'brightness(120%)',
+                'hue-rotate(90deg)'
+            ];
+            let currentFilterIdx = 0;
+
+            els.camFilterBtn.addEventListener('mousedown', (e) => e.stopPropagation()); 
+            els.camFilterBtn.addEventListener('touchstart', (e) => e.stopPropagation()); 
+            els.camFilterBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                currentFilterIdx = (currentFilterIdx + 1) % camFilters.length;
+                els.video.style.filter = camFilters[currentFilterIdx];
+            });
+
+            els.camShapeBtn.addEventListener('mousedown', (e) => e.stopPropagation()); 
+            els.camShapeBtn.addEventListener('touchstart', (e) => e.stopPropagation());
+            els.camShapeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (state.isFullscreenCam) return; 
+                state.isCircularCam = !state.isCircularCam;
+                updateCameraUI();
+            });
+
+            els.camFullscreenBtn.addEventListener('mousedown', (e) => e.stopPropagation()); 
+            els.camFullscreenBtn.addEventListener('touchstart', (e) => e.stopPropagation());
+            els.camFullscreenBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                state.isFullscreenCam = !state.isFullscreenCam;
+                if (state.isFullscreenCam) {
+                    state.camPreFullscreenPos = {
+                        left: els.camWindow.style.left,
+                        top: els.camWindow.style.top,
+                        bottom: els.camWindow.style.bottom,
+                        right: els.camWindow.style.right
+                    };
+                }
+                updateCameraUI();
+            });
+
+            // --- QR Device Sync Host Logic ---
+            els.camQrBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+            els.camQrBtn.addEventListener('touchstart', (e) => e.stopPropagation());
+            els.camQrBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                
+                // Pause Local Video Temporarily 
+                if(els.video.srcObject) {
+                    els.video.srcObject.getTracks().forEach(t => t.stop());
+                }
+
+                // Generate Random Sync Code
+                const roomId = Math.random().toString(36).substring(2, 8);
+                
+                // Build URL without previous sync parameters
+                let syncUrl = window.location.origin + window.location.pathname + '?sync=' + roomId;
+                
+                // Generate QR Code
+                els.qrCodeContainer.innerHTML = '';
+                new QRCode(els.qrCodeContainer, {
+                    text: syncUrl,
+                    width: 100, // Small enough to fit the circle cutout if active
+                    height: 100,
+                    colorDark : "#020617",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.L
+                });
+                
+                els.camQrOverlay.classList.remove('hidden');
+
+                // Start WebRTC Peer
+                if (peer) peer.destroy();
+                peer = new Peer('sblive-host-' + roomId);
+                
+                peer.on('call', (call) => {
+                    call.answer(); // Auto answer incoming mobile call
+                    
+                    call.on('stream', (remoteStream) => {
+                        els.video.srcObject = remoteStream;
+                        els.camStatus.classList.add('hidden');
+                        els.camQrOverlay.classList.add('hidden'); // Hide QR Overlay
+                        
+                        // External cams face outward, so no mirror is usually best
+                        state.isMirrored = false; 
+                        updateCameraUI();
+                    });
+                });
+            });
+
+            els.cancelQrBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+            els.cancelQrBtn.addEventListener('touchstart', (e) => e.stopPropagation());
+            els.cancelQrBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                els.camQrOverlay.classList.add('hidden');
+                if (peer) peer.destroy();
+                startLocalCamera(); // Re-activate built-in cam
+            });
+
+
+            // --- Camera Drag Logic ---
+            let isDraggingCam = false;
+            let camStartX, camStartY, camInitialLeft, camInitialTop;
+
+            els.camDragHandle.addEventListener('mousedown', (e) => {
+                if (state.isFullscreenCam) return;
+                isDraggingCam = true;
+                els.camWindow.classList.add('transition-none');
+                const rect = els.camWindow.getBoundingClientRect();
+                camInitialLeft = rect.left; camInitialTop = rect.top;
+                camStartX = e.clientX; camStartY = e.clientY;
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDraggingCam || state.isFullscreenCam) return;
+                let newLeft = camInitialLeft + (e.clientX - camStartX);
+                let newTop = camInitialTop + (e.clientY - camStartY);
+                newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - els.camWindow.offsetWidth));
+                newTop = Math.max(0, Math.min(newTop, window.innerHeight - els.camWindow.offsetHeight));
+                
+                els.camWindow.style.bottom = 'auto'; els.camWindow.style.right = 'auto';
+                els.camWindow.style.left = `${newLeft}px`; els.camWindow.style.top = `${newTop}px`;
+            });
+            
+            window.addEventListener('mouseup', () => { 
+                if(isDraggingCam) { 
+                    isDraggingCam = false; 
+                    els.camWindow.classList.remove('transition-none'); 
+                }
+            });
+
+            els.camWindow.style.bottom = '7rem';
+            els.camWindow.style.right = '2rem';
+            updateCameraUI();
+
+        })();
     </script>
 </body>
 </html>
